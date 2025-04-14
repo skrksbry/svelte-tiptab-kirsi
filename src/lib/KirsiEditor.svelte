@@ -18,20 +18,6 @@
     import { CustomCodeBlock } from './extensions/codeBlockConfig';
     import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 
-    // Props
-    export let initialContent: string = '';
-    export let initialImages: ImageInfo[] = []; // 초기 이미지 데이터
-    export let hostElement: HTMLElement | null = null; // 웹 컴포넌트 호스트 요소 참조
-
-    // State
-    let editorElement: HTMLDivElement;
-    let editor: Editor | null = null;
-    let dragActive = false;
-    let uploadedImages: Writable<ImageInfo[]> = writable<ImageInfo[]>([...initialImages]);
-    let content = initialContent;
-
-    const dispatch = createEventDispatcher();
-
     interface ImageInfo {
         id: string;
         src: string; // data URL or external URL
@@ -40,6 +26,118 @@
         type: string;
         size: number;
         file?: File; // 실제 File 객체 (선택적)
+    }
+
+    // Props
+    export let initialContent: string = '';
+    export let initialImages: ImageInfo[] = []; // 초기 이미지 데이터
+    export let hostElement: HTMLElement | null = null; // 웹 컴포넌트 호스트 요소 참조
+    export let darkMode: boolean | null = null; // 다크 모드 상태를 외부에서 명시적으로 지정할 수 있는 prop
+    export let imageUploadEndpoint: string | null = null; // 이미지 업로드 API 엔드포인트
+    export let maxHeight: string | number = 600; // 에디터 최대 높이 (기본 600px)
+
+    // State
+    let editorElement: HTMLDivElement;
+    let editor: Editor | null = null;
+    let dragActive = false;
+    let uploadedImages: Writable<ImageInfo[]> = writable<ImageInfo[]>([...initialImages]);
+    let content = initialContent;
+    let isDarkMode = false; // 다크 모드 상태 저장 변수
+    let themeClass = ''; // 테마 클래스 이름
+
+    const dispatch = createEventDispatcher<{
+        change: { content: string };
+        changeImageList: { images: ImageInfo[] };
+    }>();
+
+    // 다크 모드 감지 및 테마 클래스 설정 함수
+    function detectColorScheme() {
+        // 1. prop으로 명시적 설정이 있는 경우 그것 사용
+        if (darkMode !== null) {
+            isDarkMode = darkMode;
+        } 
+        // 2. 부모 요소의 테마를 감지 (CSS 변수 또는 클래스를 통해)
+        else if (hostElement) {
+            const hostComputedStyle = window.getComputedStyle(hostElement);
+            const rootOrBodyComputedStyle = window.getComputedStyle(document.documentElement);
+            
+            // CSS 변수로 테마 감지 시도
+            const hostTheme = hostComputedStyle.getPropertyValue('--theme') || 
+                              hostComputedStyle.getPropertyValue('--color-scheme') ||
+                              hostComputedStyle.getPropertyValue('--mode');
+                              
+            const rootTheme = rootOrBodyComputedStyle.getPropertyValue('--theme') || 
+                             rootOrBodyComputedStyle.getPropertyValue('--color-scheme') ||
+                             rootOrBodyComputedStyle.getPropertyValue('--mode');
+
+            // 일반적인 다크 모드 클래스 확인
+            const hostHasDarkClass = hostElement.classList.contains('dark') || 
+                                   hostElement.classList.contains('theme-dark') ||
+                                   hostElement.classList.contains('darkmode');
+                                   
+            const documentHasDarkClass = document.documentElement.classList.contains('dark') || 
+                                       document.body.classList.contains('dark') ||
+                                       document.documentElement.classList.contains('theme-dark') ||
+                                       document.body.classList.contains('theme-dark');
+
+            // 클래스나 CSS 변수에서 다크 모드 감지
+            if (hostTheme?.includes('dark') || rootTheme?.includes('dark') || 
+                hostHasDarkClass || documentHasDarkClass) {
+                isDarkMode = true;
+            }
+            // 3. 감지 실패 시 시스템 기본 설정 사용
+            else {
+                isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+        }
+        // 4. hostElement가 없는 경우 시스템 기본 설정 사용
+        else {
+            isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+
+        // 테마 클래스 설정
+        themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+        console.log(`[KirsiEditor] Theme detected: ${isDarkMode ? 'dark' : 'light'}`);
+    }
+
+    // 시스템 다크 모드 변경 감지 리스너
+    let colorSchemeMediaQuery: MediaQueryList;
+    function setupColorSchemeListener() {
+        colorSchemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        // 변경 감지 리스너 설정
+        const handleColorSchemeChange = (e: MediaQueryListEvent) => {
+            // 외부에서 명시적으로 설정한 경우 무시
+            if (darkMode === null) {
+                isDarkMode = e.matches;
+                themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+                console.log(`[KirsiEditor] System color scheme changed: ${isDarkMode ? 'dark' : 'light'}`);
+            }
+        };
+
+        // 리스너 등록
+        if (colorSchemeMediaQuery.addEventListener) {
+            colorSchemeMediaQuery.addEventListener('change', handleColorSchemeChange);
+        } else if (colorSchemeMediaQuery.addListener) {
+            // Safari/iOS 13 이하 지원
+            colorSchemeMediaQuery.addListener(handleColorSchemeChange);
+        }
+
+        // cleanup 함수 반환
+        return () => {
+            if (colorSchemeMediaQuery.removeEventListener) {
+                colorSchemeMediaQuery.removeEventListener('change', handleColorSchemeChange);
+            } else if (colorSchemeMediaQuery.removeListener) {
+                colorSchemeMediaQuery.removeListener(handleColorSchemeChange);
+            }
+        };
+    }
+
+    // darkMode prop이 변경될 때 테마 업데이트
+    $: if (darkMode !== null) {
+        isDarkMode = darkMode;
+        themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+        console.log(`[KirsiEditor] Theme set by prop: ${isDarkMode ? 'dark' : 'light'}`);
     }
 
     // --- Tiptap 이미지 확장 커스터마이징 ---
@@ -90,7 +188,6 @@
             }
             return list;
         });
-        // dispatch('updateImage', { images: $uploadedImages }); // 기존 dispatch 주석 처리
         hostElement?.dispatchEvent(new CustomEvent('changeImageList', { // hostElement에서 직접 dispatch
             detail: { images: $uploadedImages },
             bubbles: true,
@@ -110,35 +207,83 @@
         setTimeout(initializeImageResizing, 50);
     }
 
+    // API를 통해 이미지를 업로드하는 함수
+    async function uploadImageToServer(file: File): Promise<{success: boolean, url?: string, error?: string}> {
+        if (!imageUploadEndpoint) {
+            return { success: false, error: '업로드 엔드포인트가 설정되지 않았습니다.' };
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            const response = await fetch(imageUploadEndpoint, {
+                method: 'POST',
+                body: formData,
+                // credentials: 'include', // 필요한 경우 주석 해제
+            });
+
+            if (!response.ok) {
+                throw new Error(`업로드 실패: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            // 서버 응답 구조에 따라 URL을 추출하는 방식을 조정해야 할 수 있습니다.
+            // 여기서는 일반적인 { url: "이미지URL" } 형식을 가정합니다.
+            if (data && data.url) {
+                console.log('[KirsiEditor] 이미지 업로드 성공:', data.url);
+                return { success: true, url: data.url };
+            } else {
+                console.error('[KirsiEditor] 이미지 업로드 응답에 URL이 없습니다:', data);
+                return { success: false, error: '서버 응답에 이미지 URL이 없습니다.' };
+            }
+        } catch (error) {
+            console.error('[KirsiEditor] 이미지 업로드 오류:', error);
+            return { success: false, error: error instanceof Error ? error.message : '이미지 업로드 중 오류가 발생했습니다.' };
+        }
+    }
+
+    interface AddImageEventDetail {
+        file?: File;
+        src?: string;
+        alt?: string;
+    }
+
     // 이미지 파일 또는 URL로부터 이미지 처리
-    async function handleAddImage({ detail }: CustomEvent<{ file?: File, src?: string, alt?: string }>) {
+    async function handleAddImage({ detail }: CustomEvent<AddImageEventDetail>) {
         const { file, src, alt } = detail;
         const imageId = generateImageId();
 
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result as string;
-                if (result) {
+            // 이미지 업로드 엔드포인트가 설정되어 있으면 서버에 업로드
+            if (imageUploadEndpoint) {
+                const result = await uploadImageToServer(file);
+                
+                if (result.success && result.url) {
+                    // 서버에서 반환된 URL로 이미지 정보 생성
                     const imageInfo: ImageInfo = {
                         id: imageId,
-                        src: result,
+                        src: result.url,
                         alt: file.name,
                         name: file.name,
                         type: file.type,
                         size: file.size,
-                        file: file
                     };
+                    
                     addImageToList(imageInfo);
-                    insertImageIntoEditor(imageId, result, file.name);
+                    insertImageIntoEditor(imageId, result.url, file.name);
+                } else {
+                    // 업로드 실패 시 fallback으로 base64 사용 (선택사항)
+                    console.error('[KirsiEditor] 서버 업로드 실패, base64로 전환:', result.error);
+                    processImageAsBase64(file, imageId);
                 }
-            };
-            reader.onerror = (e) => {
-                console.error("File reading error:", e);
-            };
-            reader.readAsDataURL(file);
+            } else {
+                // 업로드 엔드포인트가 없으면 base64로 처리
+                processImageAsBase64(file, imageId);
+            }
         } else if (src) {
-             const imageInfo: ImageInfo = {
+            const imageInfo: ImageInfo = {
                 id: imageId,
                 src: src,
                 alt: alt || '이미지',
@@ -151,6 +296,31 @@
         }
     }
 
+    // Base64로 이미지 처리하는 함수
+    function processImageAsBase64(file: File, imageId: string) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result as string;
+            if (result) {
+                const imageInfo: ImageInfo = {
+                    id: imageId,
+                    src: result,
+                    alt: file.name,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    file: file
+                };
+                addImageToList(imageInfo);
+                insertImageIntoEditor(imageId, result, file.name);
+            }
+        };
+        reader.onerror = (e) => {
+            console.error("File reading error:", e);
+        };
+        reader.readAsDataURL(file);
+    }
+
     // 이미지 리스트에서 이미지 제거
     async function handleRemoveImage({ detail }: CustomEvent<{ id: string }>) {
         const { id } = detail;
@@ -158,7 +328,6 @@
 
         // 1. 이미지 목록(uploadedImages store)에서 제거
         uploadedImages.update(list => list.filter(img => img.id !== id));
-        // dispatch('updateImage', { images: $uploadedImages }); // 기존 dispatch 주석 처리
         hostElement?.dispatchEvent(new CustomEvent('changeImageList', { // hostElement에서 직접 dispatch
             detail: { images: $uploadedImages },
             bubbles: true,
@@ -195,8 +364,6 @@
                     const node = state.doc.nodeAt(pos);
                     if (node) {
                          console.log(`[KirsiEditor] Adding delete step for original pos ${pos} (size: ${node.nodeSize})`);
-                         // deleteRange를 사용하여 해당 위치의 노드를 삭제하는 단계를 추가
-                         // tr은 변경되지만, 다음 반복의 pos는 원본 문서 기준임
                          tr = tr.deleteRange(pos, pos + node.nodeSize);
                     } else {
                          console.warn(`[KirsiEditor] Node not found at original pos ${pos} in state.doc, skipping deletion step.`);
@@ -216,8 +383,14 @@
         }
     }
 
+    interface InsertImageEventDetail {
+        id: string;
+        src: string;
+        alt: string;
+    }
+
     // 이미지 리스트에서 이미지 삽입 요청 처리
-    function handleInsertImage({ detail }: CustomEvent<{ id: string, src: string, alt: string }>) {
+    function handleInsertImage({ detail }: CustomEvent<InsertImageEventDetail>) {
         insertImageIntoEditor(detail.id, detail.src, detail.alt);
     }
 
@@ -233,12 +406,10 @@
         if (e.dataTransfer?.types.includes('Files')) {
             e.preventDefault();
             e.stopPropagation();
-             // 드롭 허용 표시 (필수는 아님)
-            e.dataTransfer.dropEffect = 'copy';
+             e.dataTransfer.dropEffect = 'copy';
         }
     }
     function handleDragLeave(e: DragEvent) {
-         // 관련 요소가 에디터 영역 밖이면 비활성화
         if (!editorElement.contains(e.relatedTarget as Node)) {
             dragActive = false;
         }
@@ -253,7 +424,7 @@
             if (files && files.length > 0) {
                 for (const file of files) {
                     if (file.type.startsWith('image/')) {
-                        handleAddImage({ detail: { file } } as CustomEvent);
+                        handleAddImage({ detail: { file } } as CustomEvent<AddImageEventDetail>);
                     }
                 }
             }
@@ -262,7 +433,7 @@
 
     // --- 이미지 리사이징 --- (Tiptap 노드뷰 대신 직접 DOM 조작 방식)
     let isResizing = false;
-    let startX: number, startY: number, startWidth: number, startHeight: number, targetImage: HTMLImageElement | null;
+    let startX: number, startY: number, startWidth: number, startHeight: number, targetImage: HTMLImageElement | null = null;
 
     function initializeImageResizing() {
         if (!editorElement) return;
@@ -299,7 +470,6 @@
     function handleResizing(e: MouseEvent) {
         if (!isResizing || !targetImage) return;
         const dx = e.clientX - startX;
-        // 너비만 조절, 높이는 auto
         const newWidth = Math.max(50, startWidth + dx); // 최소 너비 50px
         targetImage.style.width = `${newWidth}px`;
         targetImage.style.height = 'auto';
@@ -315,15 +485,17 @@
         // Tiptap 상태 업데이트
         if (editor) {
             const { view } = editor;
-            // DOM 위치로부터 Tiptap 노드 위치 찾기 (약간 부정확할 수 있음)
-            const pos = view.posAtDOM(targetImage.closest('.image-wrapper')!, 0);
-            if (pos !== undefined) {
-                 const transaction = editor.state.tr.setNodeMarkup(pos, undefined, {
-                    ...editor.state.doc.nodeAt(pos)?.attrs,
-                    width: targetImage.style.width || null, // 변경된 너비 저장
-                    height: 'auto' // 높이는 auto로 고정
-                });
-                view.dispatch(transaction);
+            const wrapper = targetImage.closest('.image-wrapper');
+            if (wrapper) {
+                const pos = view.posAtDOM(wrapper, 0);
+                if (pos !== undefined) {
+                     const transaction = editor.state.tr.setNodeMarkup(pos, undefined, {
+                        ...editor.state.doc.nodeAt(pos)?.attrs,
+                        width: targetImage.style.width || null, // 변경된 너비 저장
+                        height: 'auto' // 높이는 auto로 고정
+                    });
+                    view.dispatch(transaction);
+                }
             }
         }
          targetImage = null;
@@ -331,6 +503,9 @@
 
     // --- 라이프사이클 및 에디터 초기화 ---
     onMount(async () => {
+        detectColorScheme();
+        const cleanupColorSchemeListener = setupColorSchemeListener();
+
         editor = new Editor({
             element: editorElement,
             extensions: [
@@ -360,8 +535,7 @@
             content: content,
             onUpdate: ({ editor: currentEditor }) => {
                  content = currentEditor.getHTML();
-                 // dispatch('updateContent', { content: content }); // 기존 dispatch 주석 처리
-                 hostElement?.dispatchEvent(new CustomEvent('change', { // hostElement에서 직접 dispatch
+                 hostElement?.dispatchEvent(new CustomEvent('change', {
                      detail: { content: content },
                      bubbles: true,
                      composed: true
@@ -376,6 +550,7 @@
                          stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
                              currentEditor.state.doc.nodesBetween(newStart, newEnd, (node, pos) => {
                                  if (node.type.name === 'image') imageModified = true;
+                                 return true; // 계속 순회
                              });
                              if (step.from !== step.to && step.slice?.content?.size === 0) {
                                  const nodeBefore = currentEditor.state.doc.nodeAt(step.from);
@@ -391,36 +566,57 @@
             },
         });
 
-        // 초기 UI 설정
         setTimeout(() => {
              initializeImageResizing();
         }, 150); 
 
-        // 웹 컴포넌트 API 노출 (기존 코드 유지)
-         const hostElement = editorElement.getRootNode() as ShadowRoot;
-         if (hostElement && hostElement.host) {
-            (hostElement.host as any).setContent = (newContent: string) => {
+         const shadowHost = editorElement.getRootNode() as ShadowRoot;
+         if (shadowHost && shadowHost.host) {
+            (shadowHost.host as any).setContent = (newContent: string) => {
                 editor?.commands.setContent(newContent, false);
             };
-             (hostElement.host as any).getContent = () => {
+            (shadowHost.host as any).getContent = () => {
                 return editor?.getHTML() || '';
             };
-             (hostElement.host as any).getImages = () => {
+            (shadowHost.host as any).getImages = () => {
                 return $uploadedImages;
             };
-             (hostElement.host as any).setImages = (newImages: ImageInfo[]) => {
+            (shadowHost.host as any).setImages = (newImages: ImageInfo[]) => {
                 uploadedImages.set(newImages);
-                 // Set images may require updating editor content if images were removed
-                 // This part needs careful implementation based on how you want to handle synchronization
+            };
+            (shadowHost.host as any).setDarkMode = (dark: boolean) => {
+                darkMode = dark;
+                isDarkMode = dark;
+                themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+            };
+            (shadowHost.host as any).isDarkMode = () => {
+                return isDarkMode;
+            };
+            // 자동 다크 모드 감지 메소드 추가
+            (shadowHost.host as any).useAutoDarkMode = () => {
+                darkMode = null; // prop 설정 해제
+                detectColorScheme(); // 시스템이나 부모 요소의 테마 감지
+            };
+            // 이미지 업로드 엔드포인트 설정 메소드 추가
+            (shadowHost.host as any).setImageUploadEndpoint = (endpoint: string) => {
+                imageUploadEndpoint = endpoint;
+                console.log('[KirsiEditor] 이미지 업로드 엔드포인트 설정:', endpoint);
+            };
+            // 현재 이미지 업로드 엔드포인트 확인 메소드 추가
+            (shadowHost.host as any).getImageUploadEndpoint = () => {
+                return imageUploadEndpoint;
             };
          }
+
+        return () => {
+            cleanupColorSchemeListener();
+        };
     });
 
     onDestroy(() => {
         editor?.destroy();
     });
 
-    // Public API for Svelte component usage (if needed)
     export function getContent(): string {
         return editor?.getHTML() || '';
     }
@@ -432,25 +628,43 @@
     }
     export function setImages(newImages: ImageInfo[]): void {
          uploadedImages.set(newImages);
-         // dispatch('updateImage', { images: newImages }); // 기존 dispatch 주석 처리
-         hostElement?.dispatchEvent(new CustomEvent('changeImageList', { // hostElement에서 직접 dispatch
+         hostElement?.dispatchEvent(new CustomEvent('changeImageList', {
              detail: { images: newImages },
              bubbles: true,
              composed: true
          }));
          console.log('[KirsiEditor.svelte] Dispatched changeImageList from host via setImages:', newImages);
-         // Potentially remove images from editor content if they are no longer in the list
-         // This logic needs careful consideration based on desired behavior.
+    }
+
+    export function toggleDarkMode(): void {
+        isDarkMode = !isDarkMode;
+        themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+    }
+
+    export function setDarkMode(dark: boolean): void {
+        darkMode = dark;
+        isDarkMode = dark;
+        themeClass = isDarkMode ? 'kirsi-dark-theme' : 'kirsi-light-theme';
+    }
+
+    // 이미지 업로드 엔드포인트 설정 함수
+    export function setImageUploadEndpoint(endpoint: string): void {
+        imageUploadEndpoint = endpoint;
+    }
+    
+    // 현재 이미지 업로드 엔드포인트 반환 함수
+    export function getImageUploadEndpoint(): string | null {
+        return imageUploadEndpoint;
     }
 
 </script>
 
-<div class="kirsi-editor-wrapper">
+<div class="kirsi-editor-wrapper {themeClass}">
     {#if editor}
-        <Toolbar {editor} on:addImage={handleAddImage} />
+        <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} />
     {/if}
 
-    <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} />
+    <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} {isDarkMode} />
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -460,6 +674,7 @@
         on:dragleave={handleDragLeave}
         on:dragover={handleDragOver}
         on:drop={handleDrop}
+        style="max-height: {maxHeight}px;"
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div 
@@ -485,23 +700,50 @@
     .kirsi-editor-wrapper {
         border: 1px solid #e0e0e0;
         border-radius: 4px;
-        overflow: hidden;
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: 100%; /* 필요에 따라 높이 조절 */
+        height: auto; /* 컨텐츠에 맞게 자동 조절되도록 변경 */
+        min-height: 500px; /* 최소 높이 설정 */
+    }
+
+    /* 라이트 모드 스타일 (기본) */
+    .kirsi-light-theme {
+        background-color: #ffffff;
+        color: #333333;
+    }
+
+    /* 다크 모드 스타일 */
+    .kirsi-dark-theme {
+        background-color: #1e1e1e;
+        color: #e0e0e0;
+        border-color: #444444;
+    }
+
+    .kirsi-dark-theme :global(.ProseMirror) {
+        color: #e0e0e0;
+    }
+
+    .kirsi-dark-theme :global(.ProseMirror a) {
+        color: #60a5fa; /* 다크 모드에서 링크 색상 */
     }
 
     .editor-container {
         position: relative; /* for drop overlay */
         flex-grow: 1;
-        overflow-y: auto; /* 스크롤 추가 */
+        overflow-y: auto; /* 최대 높이를 초과할 경우에만 스크롤 활성화 */
+    }
+
+    /* 다크 모드에서 에디터 컨테이너 */
+    .kirsi-dark-theme .editor-container {
+        background-color: #1e1e1e;
     }
 
     .editor-content {
         padding: 1rem;
         outline: none;
-        min-height: 420px;
+        min-height: 100px; /* 최소 높이 줄임 */
+        height: auto; /* 컨텐츠에 따라 자동으로 높이 조절 */
         cursor: text;
     }
 
@@ -553,6 +795,13 @@
         border: 2px dashed #007bff;
         border-radius: 4px;
     }
+
+    /* 다크 모드 드롭 오버레이 조정 */
+    .kirsi-dark-theme .drop-overlay {
+        background-color: rgba(0, 120, 255, 0.15);
+        border-color: #60a5fa;
+    }
+
     .drop-message {
         background-color: white;
         padding: 1rem 2rem;
@@ -560,6 +809,13 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         font-weight: bold;
         color: #007bff;
+    }
+
+    /* 다크 모드 드롭 메시지 */
+    .kirsi-dark-theme .drop-message {
+        background-color: #2d2d2d;
+        color: #60a5fa;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     /* 이미지 리사이징 스타일 */
@@ -586,6 +842,14 @@
          border: 1px solid #007bff;
     }
 
+    /* 다크 모드 이미지 테두리 조정 */
+    :global(.kirsi-dark-theme .image-wrapper img.resizing) {
+        border-color: #60a5fa;
+    }
+    :global(.kirsi-dark-theme .image-wrapper:hover img:not(.resizing)) {
+        border-color: #60a5fa;
+    }
+
     :global(.resize-handle) {
         position: absolute;
         bottom: 0px;
@@ -600,16 +864,18 @@
         transition: opacity 0.2s ease;
         z-index: 5;
     }
+
+    /* 다크 모드 리사이즈 핸들 스타일 */
+    :global(.kirsi-dark-theme .resize-handle) {
+        background-color: #60a5fa;
+        border-color: #2d2d2d;
+    }
+
     :global(.image-wrapper:hover .resize-handle) {
         opacity: 1;
     }
 
-    /* 코드 블록 관련 :global 스타일 제거 */
-    /* :global(.ProseMirror .code-block) { ... } */
-    /* :global(.code-language-select-container) { ... } */
-    /* :global(.code-language-select) { ... } */
-
-     /* Tiptap CodeBlockLowlight 기본 스타일 + 테마 호환성 */
+    /* Tiptap CodeBlockLowlight 기본 스타일 + 테마 호환성 */
     :global(.ProseMirror pre) {
         font-family: 'JetBrainsMono', monospace;
         padding: 0.75rem 1rem;
@@ -617,17 +883,108 @@
         margin: 1em 0;
         white-space: pre;
         overflow-x: auto;
-        /* 테마 적용 위해 배경/색상 제거 */
+        background-color: #f6f8fa; /* 라이트 모드 기본 코드 배경 */
+        position: relative; /* 언어 선택기 위치 잡기 위해 추가 */
     }
+
+    /* 다크 모드 코드 블록 스타일 */
+    :global(.kirsi-dark-theme .ProseMirror pre) {
+        background-color: #2d2d2d; /* 다크 모드 코드 배경 */
+    }
+
     :global(.ProseMirror pre code) { 
         display: block; 
         padding: 0;
         border: none;
         font-size: 0.85em;
         background: none; 
-        /* color: inherit; /* 테마 색상 적용 안 될 시 이 줄 제거 */
     }
-
-    /* 외부에서 Highlight.js 테마 CSS 로드 (웹 컴포넌트 내부 주입 방식으로 변경됨) */
+    
+    /* 코드 블록 언어 선택기 스타일 */
+    :global(.code-language-select-button) {
+        position: absolute;
+        top: 4px;
+        right: 8px;
+        background-color: transparent;
+        padding: 2px 4px;
+        font-size: 12px;
+        color: #666;
+        cursor: pointer;
+        z-index: 5;
+        transition: all 0.2s ease;
+        user-select: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: none;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-select-button) {
+        color: #aaa;
+    }
+    
+    :global(.code-language-select-button:hover) {
+        color: #333;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-select-button:hover) {
+        color: #fff;
+    }
+    
+    :global(.code-language-text) {
+        font-size: 12px;
+    }
+    
+    :global(.code-language-arrow) {
+        font-size: 10px;
+        margin-left: 2px;
+    }
+    
+    :global(.code-language-select-menu) {
+        min-width: 120px;
+        max-height: 300px;
+        overflow-y: auto;
+        background-color: white;
+        border: 1px solid #d0d0d0;
+        border-radius: 4px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-select-menu) {
+        background-color: #333;
+        border-color: #555;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+    
+    :global(.code-language-option) {
+        padding: 4px 12px;
+        font-size: 12px;
+        color: #333;
+        cursor: pointer;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-option) {
+        color: #e0e0e0;
+    }
+    
+    :global(.code-language-option:hover) {
+        background-color: #f0f0f0;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-option:hover) {
+        background-color: #444;
+    }
+    
+    :global(.code-language-option.selected) {
+        background-color: #e0e0e0;
+        font-weight: bold;
+    }
+    
+    :global(.kirsi-dark-theme .code-language-option.selected) {
+        background-color: #555;
+    }
 
 </style>

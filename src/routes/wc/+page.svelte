@@ -8,14 +8,52 @@
         getContent: () => string;
         setImages: (images: any[]) => void; // ImageInfo 타입을 가져올 수 없으므로 any 사용
         getImages: () => any[];
-        // 필요에 따라 다른 메소드나 프로퍼티 타입 추가
+        setDarkMode: (darkModeEnabled: boolean) => void; // 다크 모드 설정 메서드 추가
+        isDarkMode: () => boolean; // 다크 모드 상태 확인 메서드 추가
+        useAutoDarkMode: () => void; // 자동 다크 모드 설정 메서드 추가
     }
 
     let editorRef: KirsiEditorElement | null = null;
     let currentContent = '<p>Web Component Loaded!</p>';
     let currentImages: any[] = [];
+    let isDarkMode = true; // 초기값을 다크모드로 설정
+    
+    // 페이지 로드 시 다크모드 적용
+    function applyDarkMode(dark: boolean) {
+        isDarkMode = dark;
+        document.documentElement.classList.toggle('dark', dark);
+        document.body.classList.toggle('dark', dark);
+        
+        // 에디터가 초기화되었다면 다크모드 수동 설정
+        if (editorRef && typeof editorRef.setDarkMode === 'function') {
+            console.log(`Setting editor dark mode to: ${dark}`);
+            editorRef.setDarkMode(dark);
+        }
+    }
+    
+    // 다크모드 토글 함수
+    function toggleDarkMode() {
+        applyDarkMode(!isDarkMode);
+    }
+    
+    // 자동 다크모드 설정 함수
+    function useAutoDarkMode() {
+        if (editorRef && typeof editorRef.useAutoDarkMode === 'function') {
+            console.log('Setting editor to auto dark mode');
+            editorRef.useAutoDarkMode();
+            // 상태 확인을 위해 잠시 후 현재 상태 확인
+            setTimeout(() => {
+                if (editorRef && typeof editorRef.isDarkMode === 'function') {
+                    isDarkMode = editorRef.isDarkMode();
+                }
+            }, 50);
+        }
+    }
 
     onMount(() => {
+        // 페이지 로드 시 다크모드 적용
+        applyDarkMode(isDarkMode);
+        
         const editorElement = editorRef; // onMount 시점의 ref 값 사용
 
         if (editorElement) {
@@ -91,39 +129,155 @@
     <script src="/kirsi-editor.iife.js" defer></script>
 </svelte:head>
 
-<h1>KirsiEditor Web Component</h1>
+<div class="container {isDarkMode ? 'dark-mode' : 'light-mode'}">
+    <h1>KirsiEditor Web Component - {isDarkMode ? '다크 모드' : '라이트 모드'}</h1>
 
+    <div class="theme-controls">
+        <button on:click={toggleDarkMode}>
+            {isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
+        </button>
+        <button on:click={useAutoDarkMode} class="auto-btn">
+            자동 테마 감지 모드
+        </button>
+    </div>
 
-<div style="width: 100%; display: flex; justify-content: center; margin:10px;">
-<div style="height: 500px; width: 80%; margin-bottom: 1rem;">
-    <!-- 웹 컴포넌트 사용 -->
-    <!-- svelte-ignore a11y-missing-attribute -->
-    <kirsi-editor bind:this={editorRef}></kirsi-editor>
-</div>
-</div>
+    <div class="editor-container">
+        <!-- 웹 컴포넌트 사용 -->
+        <!-- svelte-ignore a11y-missing-attribute -->
+        <kirsi-editor bind:this={editorRef}></kirsi-editor>
+    </div>
 
-<div style="margin-top: 1rem;">
-    <button on:click={showEditorContent}>Get Editor Content</button>
-    <button on:click={addDemoImage}>Add Demo Image</button>
-</div>
+    <div class="controls">
+        <button on:click={showEditorContent}>Get Editor Content</button>
+        <button on:click={addDemoImage}>Add Demo Image</button>
+    </div>
 
-<h2>Current State (from Web Component Events)</h2>
-<div>
-    <h3>Images:</h3>
-    <pre>{JSON.stringify(currentImages, null, 2)}</pre>
-</div>
-<div>
-    <h3>Content:</h3>
+    <h2>Current State (from Web Component Events)</h2>
+    <div>
+        <h3>Images:</h3>
+        <pre>{JSON.stringify(currentImages, null, 2)}</pre>
+    </div>
+    <div>
+        <h3>Content:</h3>
+        <div class="content-preview">
+            {@html currentContent}
+        </div>
+    </div>
 </div>
 
 <style>
-    /* 페이지 레벨 스타일 */
+    :global(html.dark), :global(body.dark) {
+        --bg-color: #121212;
+        --text-color: #e0e0e0;
+        --border-color: #444;
+        --btn-bg: #333;
+        --btn-hover-bg: #444;
+        --pre-bg: #1e1e1e;
+    }
+
+    .container {
+        padding: 1rem;
+        min-height: 100vh;
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* 라이트 모드 스타일 */
+    .light-mode {
+        background-color: #f5f5f5;
+        color: #333;
+    }
+
+    /* 다크 모드 스타일 */
+    .dark-mode {
+        background-color: var(--bg-color, #121212);
+        color: var(--text-color, #e0e0e0);
+    }
+
+    .dark-mode pre {
+        background-color: var(--pre-bg, #1e1e1e);
+        border-color: var(--border-color, #444);
+        color: var(--text-color, #e0e0e0);
+    }
+
+    .dark-mode button {
+        background-color: var(--btn-bg, #333);
+        color: var(--text-color, #e0e0e0);
+        border-color: var(--border-color, #444);
+    }
+
+    .dark-mode button:hover {
+        background-color: var(--btn-hover-bg, #444);
+    }
+
+    .theme-controls {
+        margin-bottom: 1rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .editor-container {
+        height: auto; 
+        width: 100%;
+        margin-bottom: 1rem;
+        transition: border-color 0.3s;
+        border: 1px solid var(--border-color, #ccc);
+        border-radius: 4px;
+    }
+
+    .controls {
+        margin: 1rem 0;
+    }
+
+    /* 웹 컴포넌트 스타일 */
     kirsi-editor {
-        display: block; /* 웹 컴포넌트가 영역을 차지하도록 */
+        display: block;
         width: 100%;
         height: 100%;
+        border-radius: 4px;
+        overflow: hidden;
     }
-     button {
-         margin-right: 0.5rem;
-     }
+    
+    button {
+        margin-right: 0.5rem;
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background-color: #fff;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    button:hover {
+        background-color: #f0f0f0;
+    }
+
+    .auto-btn {
+        background-color: #e0f0ff;
+    }
+
+    .dark-mode .auto-btn {
+        background-color: #1a365d;
+    }
+
+    pre {
+        background-color: #f5f5f5;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+    }
+
+    .content-preview {
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-top: 0.5rem;
+        background-color: #fff;
+    }
+
+    .dark-mode .content-preview {
+        background-color: #1e1e1e;
+        border-color: #444;
+    }
 </style>

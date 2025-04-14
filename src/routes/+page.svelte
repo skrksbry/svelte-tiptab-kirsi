@@ -210,9 +210,7 @@ export default MyReactEditorComponent;`}</pre>
   }
   
   .editor-wrapper {
-    border: 1px solid #ccc;
     border-radius: 8px;
-    overflow: hidden;
     margin-bottom: 2rem;
     min-height: 400px;
     display: flex;
@@ -222,7 +220,6 @@ export default MyReactEditorComponent;`}</pre>
   kirsi-editor {
     display: block;
     width: 100%;
-    height: 500px;
   }
   
   .loading-editor {

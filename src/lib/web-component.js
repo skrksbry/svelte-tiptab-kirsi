@@ -11,9 +11,13 @@ class KirsiEditorElement extends HTMLElement {
     _unmount = null; // Svelte 5: 언마운트 함수
     _content = '';
     _images = []; // Array to hold image info objects
+    _darkMode = null; // 다크 모드 상태, null은 자동 감지
+    _colorSchemeObserver = null; // 색상 스키마 변경 감지를 위한 MutationObserver
+    _imageUploadEndpoint = null; // 이미지 업로드 API 엔드포인트
+    _maxHeight = 600; // 에디터 최대 높이 (기본 600px)
 
     static get observedAttributes() {
-        return ['content', 'images'];
+        return ['content', 'images', 'dark-mode', 'image-upload-endpoint', 'max-height'];
     }
 
     constructor() {
@@ -37,6 +41,15 @@ class KirsiEditorElement extends HTMLElement {
             console.error('[KirsiEditorElement] Failed to inject highlight.js style:', error);
         }
 
+        // --- 다크 모드 상태 초기 설정 ---
+        this._initDarkModeState();
+
+        // --- 이미지 업로드 엔드포인트 초기 설정 ---
+        this._initImageUploadEndpoint();
+
+        // --- 최대 높이 초기 설정 ---
+        this._initMaxHeight();
+
         try {
             // Svelte 5: mount 함수 사용
             const mountedComponent = mount(KirsiEditor, {
@@ -44,19 +57,19 @@ class KirsiEditorElement extends HTMLElement {
                 props: {
                     initialContent: this._content,
                     initialImages: this._images,
-                    hostElement: this // 웹 컴포넌트 인스턴스를 prop으로 전달
+                    hostElement: this, // 웹 컴포넌트 인스턴스를 prop으로 전달
+                    darkMode: this._darkMode, // 다크 모드 상태 전달
+                    imageUploadEndpoint: this._imageUploadEndpoint, // 이미지 업로드 엔드포인트 전달
+                    maxHeight: this._maxHeight // 최대 높이 전달
                 }
             });
 
             console.log('[KirsiEditorElement] Component mounted, returned object:', mountedComponent); 
-            // Svelte 5 mount 반환값 직접 확인
-            // console.log('[KirsiEditorElement] Checking instance:', mountedComponent?.instance);
-            // console.log('[KirsiEditorElement] Checking unmount function type:', typeof mountedComponent?.unmount);
 
             // 검사 조건 변경: mountedComponent 객체 자체를 인스턴스로 간주
             if (!mountedComponent) { 
-                 console.error('[KirsiEditorElement] Failed to mount Svelte component: mount() returned invalid object.');
-                 return;
+                console.error('[KirsiEditorElement] Failed to mount Svelte component: mount() returned invalid object.');
+                return;
             }
             // unmount 함수 존재 여부 확인 (반환된 객체 자체에 있을 수 있음)
             if (typeof mountedComponent.unmount !== 'function') {
@@ -66,31 +79,6 @@ class KirsiEditorElement extends HTMLElement {
             this._editorInstance = mountedComponent; // 객체 자체를 인스턴스로 할당
             // unmount 함수 할당
             this._unmount = typeof mountedComponent.unmount === 'function' ? mountedComponent.unmount : () => {}; 
-
-            // --- 이벤트 리스너 제거 (Svelte 컴포넌트가 직접 host에서 dispatch) ---
-            // console.log('[KirsiEditorElement] Attaching event listeners to shadowRoot:', this.shadowRoot); 
-            // this.shadowRoot.addEventListener('updateContent', (event) => {
-            //      const customEvent = new CustomEvent('change', {
-            //          detail: { content: event.detail.content },
-            //          bubbles: true, 
-            //          composed: true 
-            //      });
-            //      this.dispatchEvent(customEvent);
-            //      this._content = event.detail.content; 
-            //      console.log('[KirsiEditorElement] Dispatched "change" event:', event.detail.content);
-            // });
-            // this.shadowRoot.addEventListener('updateImage', (event) => {
-            //     const customEvent = new CustomEvent('changeImageList', {
-            //         detail: { images: event.detail.images },
-            //         bubbles: true,
-            //         composed: true
-            //     });
-            //     this.dispatchEvent(customEvent);
-            //     this._images = event.detail.images; 
-            //     console.log('[KirsiEditorElement] Dispatched "changeImageList" event:', event.detail.images);
-            // });
-            // console.log('[KirsiEditorElement] Event listeners for updateContent and updateImage added to shadowRoot.');
-
 
             // --- 메서드 노출 --- 
             // 인스턴스의 exported 함수에 접근 (Svelte 5에서는 instance.prop 대신 instance.함수명 형태)
@@ -107,7 +95,7 @@ class KirsiEditorElement extends HTMLElement {
                 if (this._editorInstance && typeof this._editorInstance.getContent === 'function') {
                     return this._editorInstance.getContent();
                 } else {
-                     console.warn('[KirsiEditorElement] getContent method not found on Svelte instance.');
+                    console.warn('[KirsiEditorElement] getContent method not found on Svelte instance.');
                 }
                 return this._content;
             };
@@ -116,7 +104,7 @@ class KirsiEditorElement extends HTMLElement {
                 if (this._editorInstance && typeof this._editorInstance.getImages === 'function') {
                     return this._editorInstance.getImages();
                 } else {
-                     console.warn('[KirsiEditorElement] getImages method not found on Svelte instance.');
+                    console.warn('[KirsiEditorElement] getImages method not found on Svelte instance.');
                 }
                 return this._images;
             };
@@ -128,7 +116,81 @@ class KirsiEditorElement extends HTMLElement {
                     console.warn('[KirsiEditorElement] setImages method not found on Svelte instance.');
                 }
             };
+
+            // 다크 모드 관련 API 추가
+            this.setDarkMode = (darkModeEnabled) => {
+                this._darkMode = !!darkModeEnabled;
+                if (this._editorInstance && typeof this._editorInstance.setDarkMode === 'function') {
+                    this._editorInstance.setDarkMode(this._darkMode);
+                } else {
+                    console.warn('[KirsiEditorElement] setDarkMode method not found on Svelte instance.');
+                }
+                // 속성도 업데이트
+                this.setAttribute('dark-mode', this._darkMode ? 'true' : 'false');
+            };
+
+            this.isDarkMode = () => {
+                if (this._editorInstance && typeof this._editorInstance.isDarkMode === 'function') {
+                    return this._editorInstance.isDarkMode();
+                } 
+                return this._darkMode;
+            };
+
+            this.useAutoDarkMode = () => {
+                this._darkMode = null; // null로 설정하여 자동 감지 모드로 전환
+                // 속성 제거
+                this.removeAttribute('dark-mode');
+                // 다시 자동 감지 로직 실행
+                this._detectAndApplyDarkMode();
+            };
+
+            // 이미지 업로드 엔드포인트 관련 API 추가
+            this.setImageUploadEndpoint = (endpoint) => {
+                this._imageUploadEndpoint = endpoint;
+                if (this._editorInstance && typeof this._editorInstance.setImageUploadEndpoint === 'function') {
+                    this._editorInstance.setImageUploadEndpoint(endpoint);
+                } else {
+                    console.warn('[KirsiEditorElement] setImageUploadEndpoint method not found on Svelte instance.');
+                }
+                // 속성도 업데이트
+                if (endpoint) {
+                    this.setAttribute('image-upload-endpoint', endpoint);
+                } else {
+                    this.removeAttribute('image-upload-endpoint');
+                }
+            };
+
+            this.getImageUploadEndpoint = () => {
+                if (this._editorInstance && typeof this._editorInstance.getImageUploadEndpoint === 'function') {
+                    return this._editorInstance.getImageUploadEndpoint();
+                }
+                return this._imageUploadEndpoint;
+            };
+
+            // 최대 높이 설정 메소드 추가
+            this.setMaxHeight = (height) => {
+                this._maxHeight = height;
+                // KirsiEditor 컴포넌트에 maxHeight prop이 있다면 업데이트
+                if (this._editorInstance && typeof this._editorInstance.$set === 'function') {
+                    this._editorInstance.$set({ maxHeight: height });
+                } else {
+                    console.warn('[KirsiEditorElement] Could not set maxHeight on Svelte instance');
+                }
+                // 속성 업데이트
+                this.setAttribute('max-height', height.toString());
+            };
+
+            this.getMaxHeight = () => {
+                return this._maxHeight;
+            };
+
             console.log('[KirsiEditorElement] Methods exposed (attempted).');
+
+            // 시스템 다크 모드 변경 감지 설정
+            this._setupColorSchemeChangeListener();
+
+            // 부모 문서의 다크 모드 클래스 변경 감지 설정
+            this._setupDarkModeClassObserver();
 
         } catch (error) {
             console.error('[KirsiEditorElement] Error during connectedCallback (mount):', error);
@@ -148,13 +210,15 @@ class KirsiEditorElement extends HTMLElement {
             this._unmount = null;
             this._editorInstance = null;
         }
-        // 이벤트 리스너 제거 (필요하다면 추가)
-        // this.shadowRoot?.removeEventListener(...)
+
+        // 다크 모드 감지 관련 정리
+        this._cleanupColorSchemeListener();
+        this._cleanupDarkModeClassObserver();
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
         console.log(`[KirsiEditorElement] Attribute changed: ${name}`, { oldValue, newValue });
-         // Ensure methods are available before calling them
+        // Ensure methods are available before calling them
         if (name === 'content' && oldValue !== newValue) {
             this._content = newValue ?? '';
             // 컴포넌트가 마운트된 후에만 속성 변경 적용 & 메서드 존재 확인
@@ -166,32 +230,250 @@ class KirsiEditorElement extends HTMLElement {
             try {
                 const parsedImages = JSON.parse(newValue || '[]');
                 this._images = Array.isArray(parsedImages) ? parsedImages : [];
-                 // 컴포넌트가 마운트된 후에만 속성 변경 적용 & 메서드 존재 확인
-                 if (this._editorInstance && typeof this.setImages === 'function') {
+                // 컴포넌트가 마운트된 후에만 속성 변경 적용 & 메서드 존재 확인
+                if (this._editorInstance && typeof this.setImages === 'function') {
                     this.setImages(this._images);
-                 }
+                }
             } catch (e) {
                 console.error('[KirsiEditorElement] Failed to parse images attribute:', e);
                 this._images = [];
-                 if (this._editorInstance && typeof this.setImages === 'function') {
+                if (this._editorInstance && typeof this.setImages === 'function') {
                     this.setImages(this._images); // Reset images on error
-                 }
+                }
+            }
+        }
+        // 다크 모드 속성 변경 처리
+        if (name === 'dark-mode' && oldValue !== newValue) {
+            if (newValue === null || newValue === undefined) {
+                // 속성이 제거되면 자동 감지 모드로
+                this._darkMode = null;
+                this._detectAndApplyDarkMode();
+            } else {
+                // true/false 문자열 처리
+                const isDark = newValue === 'true' || newValue === ''; // 빈 값은 true로 처리
+                this._darkMode = isDark;
+                if (this._editorInstance && typeof this._editorInstance.setDarkMode === 'function') {
+                    this._editorInstance.setDarkMode(isDark);
+                }
+            }
+        }
+        // 이미지 업로드 엔드포인트 속성 변경 처리
+        if (name === 'image-upload-endpoint' && oldValue !== newValue) {
+            this._imageUploadEndpoint = newValue || null;
+            if (this._editorInstance && typeof this._editorInstance.setImageUploadEndpoint === 'function') {
+                this._editorInstance.setImageUploadEndpoint(this._imageUploadEndpoint);
+            }
+        }
+        // 최대 높이 속성 변경 처리
+        if (name === 'max-height' && oldValue !== newValue) {
+            // 숫자 또는 유효한 CSS 단위 값 처리
+            this._parseAndSetMaxHeight(newValue);
+            
+            // Svelte 컴포넌트에 업데이트
+            if (this._editorInstance && typeof this._editorInstance.$set === 'function') {
+                this._editorInstance.$set({ maxHeight: this._maxHeight });
             }
         }
     }
 
-     // Define properties for methods to allow access from outside
-     // These will be assigned in connectedCallback
-     setContent = (newContent) => { console.warn("setContent called before initialization"); };
-     getContent = () => {
-         console.warn("getContent called before initialization");
-         return this._content;
-     };
-     getImages = () => {
+    // 다크 모드 관련 초기화 메소드
+    _initDarkModeState() {
+        // 속성에서 초기값 가져오기
+        const darkModeAttr = this.getAttribute('dark-mode');
+        if (darkModeAttr === null || darkModeAttr === undefined) {
+            this._darkMode = null; // 자동 감지
+            this._detectAndApplyDarkMode();
+        } else {
+            // 속성값 파싱
+            const isDark = darkModeAttr === 'true' || darkModeAttr === '';
+            this._darkMode = isDark;
+        }
+        console.log(`[KirsiEditorElement] Dark mode initialized: ${this._darkMode === null ? 'auto' : this._darkMode}`);
+    }
+
+    // 이미지 업로드 엔드포인트 초기화 메소드
+    _initImageUploadEndpoint() {
+        // 속성에서 초기값 가져오기
+        const endpoint = this.getAttribute('image-upload-endpoint');
+        this._imageUploadEndpoint = endpoint || null;
+        console.log(`[KirsiEditorElement] Image upload endpoint initialized: ${this._imageUploadEndpoint || 'not set'}`);
+    }
+
+    // 최대 높이 초기화 메소드
+    _initMaxHeight() {
+        // 속성에서 초기값 가져오기
+        const maxHeightAttr = this.getAttribute('max-height');
+        if (maxHeightAttr !== null) {
+            this._parseAndSetMaxHeight(maxHeightAttr);
+        }
+        console.log(`[KirsiEditorElement] Max height initialized: ${this._maxHeight}`);
+    }
+
+    // 최대 높이 값 파싱 및 설정
+    _parseAndSetMaxHeight(value) {
+        if (value === null || value === undefined || value === '') {
+            this._maxHeight = 600; // 기본값
+            return;
+        }
+
+        // 숫자 변환 시도
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+            this._maxHeight = numValue;
+            return;
+        }
+
+        // CSS 값(예: '500px', '50vh' 등)은 그대로 사용
+        this._maxHeight = value;
+    }
+
+    // 다크 모드 상태 자동 감지 및 적용
+    _detectAndApplyDarkMode() {
+        if (this._darkMode !== null) {
+            return; // 명시적으로 설정된 경우 자동 감지 안 함
+        }
+
+        // 1. CSS 변수나 클래스로 감지
+        const documentHasDarkClass = 
+            document.documentElement.classList.contains('dark') ||
+            document.documentElement.classList.contains('theme-dark') ||
+            document.documentElement.classList.contains('darkmode') || 
+            document.body.classList.contains('dark') ||
+            document.body.classList.contains('theme-dark') ||
+            document.body.classList.contains('darkmode');
+
+        // CSS 변수 확인
+        const computedStyle = window.getComputedStyle(document.documentElement);
+        const themeVar = computedStyle.getPropertyValue('--theme') || 
+                        computedStyle.getPropertyValue('--color-scheme') || 
+                        computedStyle.getPropertyValue('--mode');
+        const hasThemeVar = themeVar?.includes('dark');
+
+        // 2. 미디어 쿼리로 시스템 다크 모드 감지
+        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        // 최종 다크 모드 결정 (우선순위: 문서 클래스/변수 > 시스템 설정)
+        const isDark = documentHasDarkClass || hasThemeVar || prefersDarkScheme;
+        
+        console.log(`[KirsiEditorElement] Auto detected dark mode:`, {
+            documentHasDarkClass,
+            hasThemeVar,
+            prefersDarkScheme,
+            finalDecision: isDark
+        });
+
+        // Svelte 컴포넌트에 적용
+        if (this._editorInstance && typeof this._editorInstance.setDarkMode === 'function') {
+            this._editorInstance.setDarkMode(isDark);
+        }
+    }
+
+    // 시스템 색상 스키마 변경 감지 리스너 설정
+    _setupColorSchemeChangeListener() {
+        this._colorSchemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        // 변경 감지 함수
+        this._handleColorSchemeChange = (e) => {
+            console.log(`[KirsiEditorElement] System color scheme changed: ${e.matches ? 'dark' : 'light'}`);
+            if (this._darkMode === null) { // 자동 모드일 때만 반응
+                this._detectAndApplyDarkMode();
+            }
+        };
+
+        // 호환성을 위한 리스너 등록
+        if (this._colorSchemeMediaQuery.addEventListener) {
+            this._colorSchemeMediaQuery.addEventListener('change', this._handleColorSchemeChange);
+        } else if (this._colorSchemeMediaQuery.addListener) { // Safari/iOS 13 이하
+            this._colorSchemeMediaQuery.addListener(this._handleColorSchemeChange);
+        }
+    }
+
+    // 시스템 색상 스키마 리스너 정리
+    _cleanupColorSchemeListener() {
+        if (!this._colorSchemeMediaQuery || !this._handleColorSchemeChange) return;
+
+        if (this._colorSchemeMediaQuery.removeEventListener) {
+            this._colorSchemeMediaQuery.removeEventListener('change', this._handleColorSchemeChange);
+        } else if (this._colorSchemeMediaQuery.removeListener) {
+            this._colorSchemeMediaQuery.removeListener(this._handleColorSchemeChange);
+        }
+
+        this._colorSchemeMediaQuery = null;
+        this._handleColorSchemeChange = null;
+    }
+
+    // 부모 문서의 다크 모드 클래스 변경 감지 설정
+    _setupDarkModeClassObserver() {
+        // body와 html의 클래스 변경을 관찰
+        const callback = (mutationsList) => {
+            for (const mutation of mutationsList) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    console.log('[KirsiEditorElement] Document class changed, rechecking dark mode');
+                    if (this._darkMode === null) { // 자동 모드일 때만
+                        this._detectAndApplyDarkMode();
+                    }
+                }
+            }
+        };
+
+        this._darkModeObserver = new MutationObserver(callback);
+        
+        // HTML 및 BODY 요소 모두 감시
+        this._darkModeObserver.observe(document.documentElement, { attributes: true });
+        this._darkModeObserver.observe(document.body, { attributes: true });
+    }
+
+    // 다크 모드 클래스 옵저버 정리
+    _cleanupDarkModeClassObserver() {
+        if (this._darkModeObserver) {
+            this._darkModeObserver.disconnect();
+            this._darkModeObserver = null;
+        }
+    }
+
+    // Define properties for methods to allow access from outside
+    // These will be assigned in connectedCallback
+    setContent = (newContent) => { console.warn("setContent called before initialization"); };
+    getContent = () => {
+        console.warn("getContent called before initialization");
+        return this._content;
+    };
+    getImages = () => {
         console.warn("getImages called before initialization");
         return this._images;
     };
-     setImages = (newImages) => { console.warn("setImages called before initialization"); };
+    setImages = (newImages) => { console.warn("setImages called before initialization"); };
+    setDarkMode = (darkModeEnabled) => { console.warn("setDarkMode called before initialization"); };
+    isDarkMode = () => { 
+        console.warn("isDarkMode called before initialization"); 
+        return this._darkMode === null ? this._detectAndReturnDarkMode() : this._darkMode;
+    };
+    useAutoDarkMode = () => { console.warn("useAutoDarkMode called before initialization"); };
+    
+    // 이미지 업로드 관련 메서드 기본 구현
+    setImageUploadEndpoint = (endpoint) => { console.warn("setImageUploadEndpoint called before initialization"); };
+    getImageUploadEndpoint = () => {
+        console.warn("getImageUploadEndpoint called before initialization");
+        return this._imageUploadEndpoint;
+    };
+
+    // 최대 높이 관련 메서드 기본 구현
+    setMaxHeight = (height) => { console.warn("setMaxHeight called before initialization"); };
+    getMaxHeight = () => {
+        console.warn("getMaxHeight called before initialization");
+        return this._maxHeight;
+    };
+
+    // 다크 모드 상태만 감지해서 반환 (초기화 전 호출용)
+    _detectAndReturnDarkMode() {
+        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const documentHasDarkClass = 
+            document.documentElement.classList.contains('dark') ||
+            document.documentElement.classList.contains('theme-dark') ||
+            document.body.classList.contains('dark') ||
+            document.body.classList.contains('theme-dark');
+        return documentHasDarkClass || prefersDarkScheme;
+    }
 }
 
 // Define the custom element
@@ -199,7 +481,7 @@ if (typeof window !== 'undefined' && !customElements.get('kirsi-editor')) {
     customElements.define('kirsi-editor', KirsiEditorElement);
     console.log('[KirsiEditorElement] Custom element <kirsi-editor> defined.');
 } else if (typeof window !== 'undefined') {
-     console.log('[KirsiEditorElement] Custom element <kirsi-editor> already defined.');
+    console.log('[KirsiEditorElement] Custom element <kirsi-editor> already defined.');
 }
 
-export default KirsiEditorElement; 
+export default KirsiEditorElement;

@@ -22,8 +22,17 @@
 	import { onMount, onDestroy } from 'svelte';
 
 	export let editor: Editor;
+	export let isDarkMode: boolean = false; // 다크 모드 상태를 받아오는 prop 추가
 
-	const dispatch = createEventDispatcher();
+	interface AddImageDetail {
+		file?: File;
+		src?: string;
+		alt?: string;
+	}
+
+	const dispatch = createEventDispatcher<{
+		addImage: AddImageDetail;
+	}>();
 
 	// 각 드롭다운의 표시 상태
 	let showColorPicker = false;
@@ -31,7 +40,6 @@
 	let showFontSizePicker = false;
 	let showLinkForm = false;
 	let showImageForm = false;
-	let showCodeLanguagePicker = false;
 
 	// 입력 값
 	let customFontSize = '16px';
@@ -39,11 +47,27 @@
 	let linkUrl = '';
 	let linkText = '';
 
+	// 추천 색상 배열 추가
+	const recommendedColors = [
+		{ name: '검정', value: '#000000' },
+		{ name: '회색', value: '#777777' },
+		{ name: '빨강', value: '#FF0000' },
+		{ name: '파랑', value: '#0000FF' },
+		{ name: '녹색', value: '#008000' },
+		{ name: '노랑', value: '#FFFF00' },
+		{ name: '보라', value: '#800080' },
+		{ name: '주황', value: '#FFA500' },
+		{ name: '하늘', value: '#00BFFF' },
+		{ name: '분홍', value: '#FF69B4' },
+	];
+
 	// 툴바 루트 요소 참조
 	let toolbarEl: HTMLDivElement;
 
-	// $: isCodeBlockActive = editor?.isActive('codeBlock'); // 반응형 선언 제거
-	let isCodeBlockActive = false; // 일반 변수로 변경
+	// 마우스 이벤트 플래그 추가
+	let isColorPickerDragging = false;
+
+	let isCodeBlockActive = false;
 
 	// 선택된 텍스트의 스타일 정보를 저장할 반응형 변수들
 	let selectedFontFamily = 'inherit';
@@ -54,6 +78,11 @@
 	function handleClickOutside(event: Event) {
 		if (!toolbarEl) return;
 		const target = event.target as Node;
+
+		// 컬러피커 드래그 중이면 이벤트 무시
+		if (isColorPickerDragging) {
+			return;
+		}
 
         // 클릭된 요소가 컬러 피커 input 자체인지 확인
         if ((target as HTMLElement).matches('.color-picker-content input[type="color"]')) {
@@ -85,6 +114,15 @@
         }
 	}
 
+	// 마우스 이벤트 핸들러 추가
+	function handleColorPickerMouseDown() {
+		isColorPickerDragging = true;
+	}
+	
+	function handleColorPickerMouseUp() {
+		isColorPickerDragging = false;
+	}
+
 	// 모든 드롭다운 닫기 함수
 	function closeAllDropdowns() {
 		showColorPicker = false;
@@ -92,7 +130,6 @@
 		showFontSizePicker = false;
 		showLinkForm = false;
 		showImageForm = false;
-		showCodeLanguagePicker = false;
 	}
 
 	const fontFamilies = [
@@ -116,19 +153,6 @@
 		{ name: '36px', value: '36px' },
 		{ name: '42px', value: '42px' },
 		{ name: '48px', value: '48px' },
-	];
-
-	const codeLanguages = [
-		{ name: 'Auto', value: null },
-		{ name: 'Plain Text', value: 'text' },
-		{ name: 'JavaScript', value: 'javascript' },
-		{ name: 'TypeScript', value: 'typescript' },
-		{ name: 'HTML', value: 'html' },
-		{ name: 'CSS', value: 'css' },
-		{ name: 'Python', value: 'python' },
-		{ name: 'Java', value: 'java' },
-		{ name: 'C++', value: 'cpp' },
-		{ name: 'C#', value: 'csharp' },
 	];
 
 	function toggleBold() {
@@ -174,7 +198,7 @@
 
 	function setColor(color: string) {
 		editor?.chain().focus().setColor(color).run();
-		closeAllDropdowns(); // 닫기 (Color picker는 input이라 자동 닫힘이 필요 없을 수 있음)
+		selectedColor = color; // 현재 선택된 색상 업데이트
 	}
 
 	function setFontSize(fontSize: string) {
@@ -183,7 +207,6 @@
         } else {
 		    editor?.chain().focus().setFontSize(fontSize).run();
         }
-		closeAllDropdowns(); // 닫기
 	}
 
 	function setCustomFontSize() {
@@ -235,19 +258,12 @@
 		return editor?.getAttributes('textStyle').fontFamily || 'inherit';
 	}
 
-	function setCodeLanguage(language: string | null) {
-		if (!editor) return;
-		editor.chain().focus().updateAttributes('codeBlock', { language }).run();
-		showCodeLanguagePicker = false;
-	}
-
 	function toggleDropdown(dropdown: string) {
 		const currentShowColorPicker = showColorPicker;
 		const currentShowFontPicker = showFontPicker;
 		const currentShowFontSizePicker = showFontSizePicker;
 		const currentShowLinkForm = showLinkForm;
 		const currentShowImageForm = showImageForm;
-		const currentShowCodeLanguagePicker = showCodeLanguagePicker;
 
 		closeAllDropdowns();
 
@@ -257,17 +273,11 @@
 			case 'fontSizePicker': showFontSizePicker = !currentShowFontSizePicker; break;
 			case 'linkForm': showLinkForm = !currentShowLinkForm; break;
 			case 'imageForm': showImageForm = !currentShowImageForm; break;
-			case 'codeLanguagePicker': showCodeLanguagePicker = !currentShowCodeLanguagePicker; break;
 		}
 	}
 
-	function getCurrentCodeLanguage(): string | null {
-		if (!editor || !editor.isActive('codeBlock')) return null;
-		return editor.getAttributes('codeBlock').language || null;
-	}
-
 	// --- isActive 함수 정의 복원 ---
-	function isActive(type: string, options = {}) {
+	function isActive(type: string, options: Record<string, any> = {}) {
 		return editor?.isActive(type, options) ?? false;
 	}
 
@@ -299,6 +309,9 @@
 		if (toolbarEl) {
 			const rootNode = toolbarEl.getRootNode();
 			rootNode.addEventListener('mousedown', handleClickOutside);
+			
+			// 글로벌 마우스업 이벤트 추가
+			document.addEventListener('mouseup', handleColorPickerMouseUp);
 		}
 	});
 
@@ -311,12 +324,15 @@
 		if (toolbarEl) {
 			const rootNode = toolbarEl.getRootNode();
 			rootNode.removeEventListener('mousedown', handleClickOutside);
+			
+			// 글로벌 마우스업 이벤트 제거
+			document.removeEventListener('mouseup', handleColorPickerMouseUp);
 		}
 	});
 
 </script>
 
-<div class="toolbar" bind:this={toolbarEl}>
+<div class="toolbar {isDarkMode ? 'toolbar-dark' : 'toolbar-light'}" bind:this={toolbarEl}>
 	<!-- 기본 서식 -->
 	<div class="toolbar-group">
 		<button class:active={isActive('bold')} on:click={toggleBold} title="굵게">
@@ -359,7 +375,10 @@
 	<!-- 폰트 관련 -->
 	<div class="toolbar-group">
 		<!-- 폰트 종류 -->
-		<div class="toolbar-group">
+		<div class="toolbar-group font-family-container">
+			<div class="font-icon-wrapper">
+				<Type size={18} />
+			</div>
 			<select 
 				value={selectedFontFamily} 
 				on:change={(e) => setFontFamily(e.currentTarget.value)}
@@ -373,27 +392,22 @@
 			</select>
 		</div>
 
-		<!-- 폰트 크기 -->
-        <div class="dropdown font-size-container">
-            <button on:click|stopPropagation={() => toggleDropdown('fontSizePicker')} title="글자 크기" class="font-size-btn">
+		<!-- 폰트 크기 - select box로 교체 -->
+        <div class="toolbar-group font-size-container">
+            <div class="font-icon-wrapper">
                 <CaseSensitive size={18} />
-                <span>{selectedFontSize === 'inherit' ? '크기' : selectedFontSize}</span>
-            </button>
-            {#if showFontSizePicker}
-                <div class="dropdown-content font-size-content">
-                    <div class="custom-font-size">
-                        <input type="text" bind:value={customFontSize} placeholder="예: 16px" on:click|stopPropagation />
-                        <button on:click={setCustomFontSize}>적용</button>
-                    </div>
-                    <div class="font-size-presets">
-                        {#each fontSizes as size}
-                            <button on:click={() => setFontSize(size.value)} style="font-size: {size.value}">
-                                {size.name}
-                            </button>
-                        {/each}
-                    </div>
-                </div>
-            {/if}
+            </div>
+            <select 
+                value={selectedFontSize}
+                on:change={(e) => setFontSize(e.currentTarget.value)}
+            >
+                <option value="inherit">기본 크기</option>
+                {#each fontSizes as size}
+                    <option value={size.value}>
+                        {size.name}
+                    </option>
+                {/each}
+            </select>
         </div>
 
 		<!-- 폰트 색상 -->
@@ -404,7 +418,25 @@
 			</button>
 			{#if showColorPicker}
                 <div class="dropdown-content color-picker-content">
-                    <input type="color" on:input={(e) => setColor(e.currentTarget.value)} value={selectedColor} on:click|stopPropagation />
+                    <div class="color-picker-wrapper">
+                        <input 
+                            type="color" 
+                            on:input={(e) => setColor(e.currentTarget.value)} 
+                            value={selectedColor} 
+                            on:mousedown|stopPropagation={handleColorPickerMouseDown}
+                            on:click|stopPropagation={() => {}}
+                        />
+                    </div>
+                    <div class="recommended-colors">
+                        {#each recommendedColors as color}
+                            <button 
+                                class="color-preset" 
+                                style="background-color: {color.value};" 
+                                title={color.name}
+                                on:click|stopPropagation={() => setColor(color.value)}
+                            ></button>
+                        {/each}
+                    </div>
                 </div>
             {/if}
 		</div>
@@ -446,25 +478,6 @@
 		<button class:active={isCodeBlockActive} on:click={toggleCodeBlock} title="코드 블록">
 			<Code size={18} />
 		</button>
-
-        <!-- 코드 블록 언어 선택 (코드 블록 활성화 시 보임) -->
-        {#if isCodeBlockActive}
-            <div class="dropdown code-language-container">
-                <button on:click|stopPropagation={() => toggleDropdown('codeLanguagePicker')} title="코드 언어">
-                    <FileCode size={18} />
-                    <span class="current-language">{ codeLanguages.find(l => l.value === getCurrentCodeLanguage())?.name || 'Auto' }</span>
-                </button>
-                {#if showCodeLanguagePicker}
-                    <div class="dropdown-content code-language-content">
-                        {#each codeLanguages as lang}
-                            <button on:click={() => setCodeLanguage(lang.value)}>
-                                {lang.name}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-            </div>
-        {/if}
 	</div>
 </div>
 
@@ -472,23 +485,56 @@
 	.toolbar {
 		display: flex;
 		padding: 8px;
-		background-color: #f5f5f5;
-		border-bottom: 1px solid #ccc;
-		flex-wrap: wrap;
+		border-bottom: 1px solid;
+		flex-wrap: wrap; /* 이미 flex-wrap: wrap이 있어서 줄바꿈은 가능 */
 		gap: 4px;
 		width: 100%;
-        align-items: center; /* 버튼 높이 정렬 */
+        align-items: center; 
+        overflow: visible; /* 드롭다운 메뉴가 보이도록 유지 */
+        box-sizing: border-box; /* 패딩을 너비에 포함 */
+        min-height: 46px; /* 최소 높이 설정 */
 	}
+
+    /* 라이트 모드 스타일 */
+    .toolbar-light {
+        background-color: #f5f5f5;
+        border-color: #ccc;
+        color: #333;
+    }
+
+    /* 다크 모드 스타일 */
+    .toolbar-dark {
+        background-color: #2d2d2d;
+        border-color: #444;
+        color: #e0e0e0;
+    }
 
 	.toolbar-group {
 		display: flex;
 		gap: 2px;
         align-items: center; /* 버튼 높이 정렬 */
 		margin-right: 8px;
-		border-right: 1px solid #ddd;
 		padding-right: 8px;
         height: 30px; /* 그룹 높이 고정 */
+        /* 툴바 그룹이 작을 때 줄바꿈 되도록 설정 */
+        flex-wrap: nowrap; 
+        min-width: fit-content;
 	}
+
+    /* 그룹이 줄바꿈될 때 오른쪽 테두리 처리 */
+    @media (max-width: 768px) {
+        .toolbar-group {
+            margin-bottom: 4px; /* 그룹 간 세로 여백 추가 */
+        }
+    }
+
+    .toolbar-light .toolbar-group {
+        border-right: 1px solid #ddd;
+    }
+
+    .toolbar-dark .toolbar-group {
+        border-right: 1px solid #444;
+    }
 
 	.toolbar-group:last-child {
 		border-right: none;
@@ -505,19 +551,37 @@
 		border-radius: 4px;
 		padding: 4px 6px; /* 패딩 조정 */
 		cursor: pointer;
-		color: #333;
         height: 28px; /* 버튼 높이 고정 */
         min-width: 28px; /* 최소 너비 */
 	}
 
-	button:hover {
-		background-color: #e0e0e0;
-	}
+    /* 라이트 모드 버튼 스타일 */
+    .toolbar-light button {
+        color: #333;
+    }
 
-	button.active {
-		background-color: #d0d0d0;
-		border-color: #aaa;
-	}
+    .toolbar-light button:hover {
+        background-color: #e0e0e0;
+    }
+
+    .toolbar-light button.active {
+        background-color: #d0d0d0;
+        border-color: #aaa;
+    }
+
+    /* 다크 모드 버튼 스타일 */
+    .toolbar-dark button {
+        color: #e0e0e0;
+    }
+
+    .toolbar-dark button:hover {
+        background-color: #444;
+    }
+
+    .toolbar-dark button.active {
+        background-color: #555;
+        border-color: #777;
+    }
 
 	.dropdown {
 		position: relative;
@@ -529,16 +593,45 @@
 		top: calc(100% + 4px); /* 툴바 아래에 위치 */
 		left: 0;
 		z-index: 1000; /* 다른 요소 위에 표시 */
-		background-color: white;
 		min-width: 160px;
-		box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
 		border-radius: 4px;
 		padding: 8px;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		border: 1px solid #ddd;
+        overflow: visible; /* 모달이 잘리지 않도록 수정 */
+        max-height: none; /* 높이 제한 해제 */
+        max-width: none; /* 너비 제한 해제 */
 	}
+
+    /* 화면 오른쪽 끝에 있는 드롭다운 메뉴가 화면을 벗어나지 않도록 */
+    @media (max-width: 768px) {
+        .dropdown-content {
+            right: 0; /* 오른쪽 정렬도 적용 */
+            left: auto; /* 왼쪽 정렬 제거 */
+        }
+        
+        /* 중앙에 있는 드롭다운은 왼쪽 정렬 유지 */
+        .link-form-container .dropdown-content,
+        .font-family-container .dropdown-content,
+        .font-size-container .dropdown-content {
+            left: 0;
+            right: auto;
+        }
+    }
+
+    /* 드롭다운 라이트/다크 모드 스타일 */
+    .toolbar-light .dropdown-content {
+        background-color: white;
+        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+        border: 1px solid #ddd;
+    }
+
+    .toolbar-dark .dropdown-content {
+        background-color: #333;
+        box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.4);
+        border: 1px solid #555;
+    }
 
     .dropdown button {
         width: 100%;
@@ -555,28 +648,59 @@
         gap: 4px;
     }
 
+	/* 폰트 선택 wrapper 스타일 추가 */
+    .font-family-container {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+        flex-shrink: 0; /* 폰트 선택 영역이 줄어들지 않도록 */
+	}
+    
+    .font-size-container {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0; /* 폰트 크기 선택 영역이 줄어들지 않도록 */
+    }
+
 	/* 폰트 선택 select 스타일 */
 	select {
 		height: 28px;
 		padding: 0 8px;
-		border: 1px solid #ccc;
 		border-radius: 4px;
-		background-color: white;
 		cursor: pointer;
 		font-size: 13px;
 		min-width: 120px;
+        max-width: 150px; /* 최대 너비 제한 */
+        width: auto; /* 내용에 맞게 너비 조정 */
 	}
 
-	select:hover {
-		background-color: #f5f5f5;
-	}
+    /* 작은 화면에서 select 요소 너비 줄임 */
+    @media (max-width: 480px) {
+        select {
+            min-width: 90px;
+            font-size: 12px;
+            padding: 0 4px;
+        }
+    }
+
+    /* 옵션 스타일링 */
+    .toolbar-light select option {
+        background-color: white;
+        color: #333;
+    }
+
+    .toolbar-dark select option {
+        background-color: #333;
+        color: #e0e0e0;
+    }
 
 	select option {
 		padding: 8px;
 		font-size: 13px;
 	}
 
-	/* 폰트 크기 드롭다운 */
+	/* 폰트 크기 드롭다운 - 필요한 스타일은 남김 */
     .font-size-btn span {
         font-size: 12px;
         min-width: 30px; /* 최소 너비 확보 */
@@ -594,11 +718,24 @@
 	.custom-font-size input {
 		flex: 1;
 		padding: 4px 8px;
-		border: 1px solid #ccc;
 		border-radius: 4px;
         font-size: 12px;
         width: 60px;
 	}
+
+    /* 라이트/다크 모드 input 스타일 */
+    .toolbar-light .custom-font-size input {
+        border: 1px solid #ccc;
+        background-color: white;
+        color: #333;
+    }
+
+    .toolbar-dark .custom-font-size input {
+        border: 1px solid #555;
+        background-color: #444;
+        color: #e0e0e0;
+    }
+
     .custom-font-size button {
         white-space: nowrap;
         padding: 4px 8px;
@@ -627,96 +764,208 @@
         width: 14px;
         height: 14px;
         border-radius: 50%;
-        border: 1px solid #ccc;
         margin-left: 4px;
     }
+
+    .toolbar-light .color-indicator {
+        border: 1px solid #ccc;
+    }
+
+    .toolbar-dark .color-indicator {
+        border: 1px solid #777;
+    }
+
 	.color-picker-content {
-        padding: 5px;
-        min-width: auto;
-        width: 40px; /* 크기 고정 */
-        height: 40px;
-	}
-	.color-picker-content input[type="color"] {
+        padding: 10px;
+        min-width: 180px;
+        width: auto;
+    }
+    
+    .color-picker-wrapper {
+        margin-bottom: 10px;
+    }
+    
+	.color-picker-wrapper input[type="color"] {
         width: 100%;
-        height: 100%;
+        height: 40px;
         border: none;
         padding: 0;
         background: none;
         cursor: pointer;
+        border-radius: 4px;
 	}
+	
+	.recommended-colors {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+    }
+    
+    .color-preset {
+        width: 25px !important;
+        height: 25px !important;
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 0;
+        min-width: 0;
+    }
+    
+    .toolbar-light .color-preset {
+        border: 1px solid #ccc;
+    }
+    
+    .toolbar-dark .color-preset {
+        border: 1px solid #555;
+    }
+    
+    .color-preset:hover {
+        transform: scale(1.1);
+    }
+
+    /* 작은 화면에서 색상 선택 드롭다운 반응형 처리 */
+    @media (max-width: 480px) {
+        .color-picker-content {
+            min-width: 150px;
+        }
+        
+        .recommended-colors {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
 
 	/* 링크/이미지 폼 드롭다운 */
 	.link-form-content,
 	.image-form-content {
 		min-width: 250px;
+        width: auto; /* 내용에 맞게 자동 너비 설정 */
+        box-sizing: border-box; /* 패딩을 너비에 포함 */
 	}
 	.link-form-content input,
 	.image-form-content input[type="text"] {
 		padding: 6px 8px;
-		border: 1px solid #ccc;
 		border-radius: 4px;
 		font-size: 13px;
         width: 100%;
         box-sizing: border-box;
         margin-bottom: 4px;
 	}
+
+    /* 라이트/다크 모드 input 스타일 */
+    .toolbar-light .link-form-content input,
+    .toolbar-light .image-form-content input[type="text"] {
+        border: 1px solid #ccc;
+        background-color: white;
+        color: #333;
+    }
+
+    .toolbar-dark .link-form-content input,
+    .toolbar-dark .image-form-content input[type="text"] {
+        border: 1px solid #555;
+        background-color: #444;
+        color: #e0e0e0;
+    }
+
 	.link-form-content button,
 	.image-form-content button {
 		padding: 5px 10px;
         font-size: 13px;
-        background-color: #eee;
-        border: 1px solid #ccc;
         width: 100%;
         height: auto;
 	}
+
+    /* 라이트/다크 모드 버튼 스타일 */
+    .toolbar-light .link-form-content button,
+    .toolbar-light .image-form-content button {
+        background-color: #eee;
+        border: 1px solid #ccc;
+        color: #333;
+    }
+
+    .toolbar-dark .link-form-content button,
+    .toolbar-dark .image-form-content button {
+        background-color: #444;
+        border: 1px solid #555;
+        color: #e0e0e0;
+    }
+
+    .toolbar-light .link-form-content button:hover,
+    .toolbar-light .image-form-content button:hover {
+        background-color: #ddd;
+    }
+
+    .toolbar-dark .link-form-content button:hover,
+    .toolbar-dark .image-form-content button:hover {
+        background-color: #555;
+    }
+
     .image-form-content hr {
         border: none;
-        border-top: 1px solid #eee;
         margin: 8px 0;
     }
+
+    .toolbar-light .image-form-content hr {
+        border-top: 1px solid #eee;
+    }
+
+    .toolbar-dark .image-form-content hr {
+        border-top: 1px solid #555;
+    }
+
+    .image-form-content {
+        padding: 12px; /* 패딩 증가 */
+        height: auto; /* 내용에 맞게 높이 조정 */
+    }
+
+    .file-upload-label {
+        display: block; /* 레이블을 블록 요소로 만들어 더 나은 간격 제공 */
+        margin-bottom: 6px; /* 레이블 아래 여백 추가 */
+    }
+
     .image-form-content .file-upload-label {
         font-size: 13px;
         margin-bottom: 4px;
+    }
+
+    .toolbar-light .image-form-content .file-upload-label {
         color: #555;
     }
+
+    .toolbar-dark .image-form-content .file-upload-label {
+        color: #ccc;
+    }
+
     .image-form-content input[type="file"] {
         font-size: 12px;
+        width: 100%; /* 파일 입력의 너비 100%로 설정 */
+        box-sizing: border-box;
+        padding: 4px 0; /* 상하 패딩 추가 */
+        height: auto; /* 높이 자동 조정 */
+        min-height: 24px; /* 최소 높이 설정 */
+    }
+
+    .toolbar-light .image-form-content input[type="file"] {
+        color: #333;
+    }
+
+    .toolbar-dark .image-form-content input[type="file"] {
+        color: #e0e0e0;
     }
 
     /* 드롭다운 컨테이너에 position: relative 추가 */
-    .font-picker-container,
-    .font-size-container,
     .color-picker-container,
     .link-form-container,
     .image-form-container {
         position: relative;
-        display: inline-block; /* 필요 시 */
+        display: inline-block; 
     }
 
-    /* 코드 언어 선택 드롭다운 스타일 */
-    .code-language-container {
-        position: relative;
-        display: inline-block;
+    /* 작은 화면에서 폰트, 링크, 이미지 드롭다운 반응형 처리 */
+    @media (max-width: 480px) {
+        .link-form-content,
+        .image-form-content {
+            min-width: 200px;
+            width: 100%;
+            max-width: 280px;
+        }
     }
-    .code-language-container > button {
-        gap: 4px;
-    }
-    .current-language {
-        font-size: 12px;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .code-language-content {
-        min-width: 120px;
-        max-height: 250px;
-        overflow-y: auto;
-    }
-     .code-language-content button {
-        font-size: 13px;
-        text-align: left;
-        padding: 5px 8px;
-     }
-
 </style>

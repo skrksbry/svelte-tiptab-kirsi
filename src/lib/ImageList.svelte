@@ -1,183 +1,268 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-	import { writable } from 'svelte/store';
-	import { X, Download, Upload } from 'lucide-svelte';
-
-	export let images: ImageInfo[] = [];
+	import { Trash2, BookImage } from 'lucide-svelte';
 
 	interface ImageInfo {
 		id: string;
-		src: string; // data URL or external URL
-		alt: string;
+		src: string;
+		alt?: string;
 		name: string;
 		type: string;
 		size: number;
-		file?: File; // 실제 File 객체 (선택적)
+		file?: File;
 	}
 
-	const dispatch = createEventDispatcher();
+	export let images: ImageInfo[] = [];
+	export let isDarkMode = false;
 
-	// 컨텍스트 메뉴 상태
-	const contextMenu = writable<{ visible: boolean; x: number; y: number; imageId: string | null }>(
-		{
-			visible: false,
-			x: 0,
-			y: 0,
-			imageId: null,
-		}
-	);
+	// 이미지 리스트 확장/축소 상태
+	let isExpanded = false;
 
-	function handleContextMenu(event: MouseEvent, imageId: string) {
-		event.preventDefault();
-		contextMenu.set({
-			visible: true,
-			x: event.clientX,
-			y: event.clientY,
-			imageId: imageId,
-		});
+	// 미리보기 이미지 목록 선택
+	let selectedImage: string | null = null;
+
+	const dispatch = createEventDispatcher<{
+		removeImage: { id: string };
+		insertImage: { id: string; src: string; alt: string };
+	}>();
+
+	function handleRemoveImage(id: string) {
+		dispatch('removeImage', { id });
 	}
 
-	function closeContextMenu() {
-		contextMenu.update((state) => ({ ...state, visible: false }));
+	function handleInsertImage(image: ImageInfo) {
+		dispatch('insertImage', { id: image.id, src: image.src, alt: image.alt || image.name });
 	}
 
-	function insertImage() {
-		const imageId = $contextMenu.imageId;
-		if (imageId) {
-			const image = images.find(img => img.id === imageId);
-			if (image) {
-				dispatch('insertImage', { id: image.id, src: image.src, alt: image.alt });
-			}
-		}
-		closeContextMenu();
+	// 이미지 리스트 토글
+	function toggleImageList() {
+		isExpanded = !isExpanded;
 	}
 
-	function removeImage() {
-		const imageId = $contextMenu.imageId;
-		if (imageId) {
-			dispatch('removeImage', { id: imageId });
-		}
-		closeContextMenu();
-	}
-
-	// 외부 클릭 시 메뉴 닫기
-	if (typeof window !== 'undefined') {
-		window.addEventListener('click', (event) => {
-			const menuElement = document.querySelector('.context-menu');
-            if ($contextMenu.visible && menuElement && !menuElement.contains(event.target as Node)) {
-				closeContextMenu();
-			}
-		});
+	// 숫자를 읽기 쉬운 형식으로 변환 (예: 1.5MB)
+	function formatFileSize(bytes: number): string {
+		if (bytes < 1024) return bytes + ' B';
+		else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+		else return (bytes / 1048576).toFixed(1) + ' MB';
 	}
 </script>
 
 {#if images.length > 0}
-	<div class="image-list-container">
-		<h4>첨부된 이미지</h4>
-		<div class="image-list">
-			{#each images as image (image.id)}
-				<div
-					class="image-item"
-					on:contextmenu={(e) => handleContextMenu(e, image.id)}
-					title={`{image.name} (${Math.round(image.size / 1024)} KB)`}
-				>
-					<img src={image.src} alt={image.alt} />
-				</div>
-			{/each}
+	<div class="image-list-container {isDarkMode ? 'dark-mode' : 'light-mode'}">
+		<div class="image-list-header" on:click={toggleImageList} role="button" tabindex="0">
+			<div class="header-content">
+				<BookImage size={16} />
+				<span>이미지 리스트 ({images.length})</span>
+			</div>
+			<div class="toggle-indicator">{isExpanded ? '▼' : '◀'}</div>
 		</div>
-	</div>
-{/if}
 
-{#if $contextMenu.visible}
-	<div
-		class="context-menu"
-		style="top: {$contextMenu.y}px; left: {$contextMenu.x}px;"
-	>
-		<button on:click={insertImage}>
-            <Upload size={14} /> 본문에 삽입
-        </button>
-		<button on:click={removeImage} class="remove-btn">
-            <X size={14} /> 삭제
-        </button>
+		{#if isExpanded}
+			<div class="image-list">
+				{#each images as image (image.id)}
+					<div class="image-item" class:selected={selectedImage === image.id}>
+						<div class="image-preview" on:click={() => handleInsertImage(image)} role="button" tabindex="0">
+							<img src={image.src} alt={image.alt || image.name} />
+						</div>
+						<div class="image-info">
+							<div class="image-name" title={image.name}>
+								{image.name.length > 15 ? image.name.substring(0, 15) + '...' : image.name}
+							</div>
+							<div class="image-meta">
+								<span>{formatFileSize(image.size)}</span>
+							</div>
+						</div>
+						<div class="image-actions">
+							<button on:click={() => handleRemoveImage(image.id)} class="remove-button" title="이미지 삭제">
+								<Trash2 size={16} />
+							</button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/if}
 
 <style>
 	.image-list-container {
-		padding: 10px;
-		background-color: #f9f9f9;
-		border-bottom: 1px solid #eee;
+		margin-bottom: 8px;
+		border-radius: 4px;
+		overflow: hidden;
 	}
 
-	.image-list-container h4 {
-		margin: 0 0 8px 0;
+	/* 라이트 모드 스타일 */
+	.light-mode {
+		background-color: #f8f9fa;
+		border: 1px solid #e0e0e0;
+		color: #333;
+	}
+
+	/* 다크 모드 스타일 */
+	.dark-mode {
+		background-color: #2d2d2d;
+		border: 1px solid #444;
+		color: #e0e0e0;
+	}
+
+	.image-list-header {
+		padding: 8px 12px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		cursor: pointer;
+		user-select: none;
+		font-weight: 500;
 		font-size: 14px;
-		color: #555;
+	}
+
+	/* 라이트/다크 모드 헤더 스타일 */
+	.light-mode .image-list-header {
+		background-color: #eaeaea;
+	}
+
+	.dark-mode .image-list-header {
+		background-color: #383838;
+	}
+
+	.header-content {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.toggle-indicator {
+		color: #888;
+		transition: transform 0.3s ease;
 	}
 
 	.image-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 10px;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 8px;
+		padding: 12px;
+		max-height: 200px;
+		overflow-y: auto;
 	}
 
 	.image-item {
-		position: relative;
-		width: 80px; /* 크기 조정 */
-		height: 80px; /* 크기 조정 */
-		border: 1px solid #ddd;
 		border-radius: 4px;
 		overflow: hidden;
-		background-color: white;
-		cursor: pointer;
-		transition: transform 0.2s ease;
+		display: flex;
+		flex-direction: column;
+		position: relative;
 	}
-    .image-item:hover {
-        transform: scale(1.05);
-    }
 
-	.image-item img {
+	/* 라이트/다크 모드 이미지 아이템 스타일 */
+	.light-mode .image-item {
+		background-color: white;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+		border: 1px solid #e0e0e0;
+	}
+
+	.dark-mode .image-item {
+		background-color: #333;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+		border: 1px solid #555;
+	}
+
+	.image-preview {
+		width: 100%;
+		height: 80px;
+		overflow: hidden;
+		position: relative;
+		cursor: pointer;
+	}
+
+	.image-preview img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		display: block;
+		transition: transform 0.3s ease;
 	}
 
-	.context-menu {
-		position: fixed; /* 화면 기준 위치 */
-		z-index: 1001; /* 툴바보다 위에 */
-		background-color: white;
-		border: 1px solid #ccc;
+	.image-preview:hover img {
+		transform: scale(1.1);
+	}
+
+	.image-info {
+		padding: 6px 8px;
+		flex-grow: 1;
+	}
+
+	.image-name {
+		font-size: 12px;
+		font-weight: 500;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.image-meta {
+		margin-top: 2px;
+		font-size: 11px;
+		color: #888;
+	}
+
+	/* 다크 모드 텍스트 색상 */
+	.dark-mode .image-meta {
+		color: #aaa;
+	}
+
+	.image-actions {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+		background-color: rgba(0, 0, 0, 0.5);
 		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-		padding: 5px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-        min-width: 120px;
 	}
 
-	.context-menu button {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-		background: none;
+	.image-item:hover .image-actions {
+		opacity: 1;
+	}
+
+	.remove-button {
 		border: none;
-		padding: 6px 10px;
-		text-align: left;
+		background: none;
+		color: white;
 		cursor: pointer;
-		border-radius: 3px;
-        font-size: 13px;
-        color: #333;
+		padding: 4px;
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	.context-menu button:hover {
-		background-color: #f0f0f0;
+	.remove-button:hover {
+		background-color: rgba(255, 0, 0, 0.3);
 	}
-    .context-menu button.remove-btn {
-        color: #d00;
-    }
-    .context-menu button.remove-btn:hover {
-        background-color: #fee;
-    }
-</style> 
+
+	/* 스크롤바 스타일링 */
+	.dark-mode .image-list::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.dark-mode .image-list::-webkit-scrollbar-track {
+		background: #2d2d2d;
+	}
+
+	.dark-mode .image-list::-webkit-scrollbar-thumb {
+		background-color: #555;
+		border-radius: 3px;
+	}
+
+	.light-mode .image-list::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.light-mode .image-list::-webkit-scrollbar-track {
+		background: #f0f0f0;
+	}
+
+	.light-mode .image-list::-webkit-scrollbar-thumb {
+		background-color: #ccc;
+		border-radius: 3px;
+	}
+</style>
