@@ -144,7 +144,7 @@
     <div class="editor-container">
         <!-- 웹 컴포넌트 사용 -->
         <!-- svelte-ignore a11y-missing-attribute -->
-        <kirsi-editor bind:this={editorRef}></kirsi-editor>
+        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} image-upload-endpoint="http://138.2.125.193:4000/images/upload"></kirsi-editor>
     </div>
 
     <div class="controls">
@@ -155,7 +155,7 @@
     <h2>Current State (from Web Component Events)</h2>
     <div>
         <h3>Images:</h3>
-        <pre>{JSON.stringify(currentImages, null, 2)}</pre>
+        <!-- <pre>{JSON.stringify(currentImages, null, 2)}</pre> -->
     </div>
     <div>
         <h3>Content:</h3>

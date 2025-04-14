@@ -22,8 +22,8 @@ export default defineConfig({
 				controlFlowFlatteningThreshold: 0.75,
 				deadCodeInjection: true, // 무작위 더미 코드 삽입
 				deadCodeInjectionThreshold: 0.2,
-				debugProtection: true, // 디버거 실행 방지 (개발 중에는 false 권장)
-				debugProtectionInterval: 1000,
+				debugProtection: false, // 디버거 실행 방지 (개발 중에는 false 권장)
+				debugProtectionInterval: 0,
 				disableConsoleOutput: true, // console.* 함수 비활성화 (배포 시 true 고려)
 				identifierNamesGenerator: 'hexadecimal', // 식별자 이름 생성 방식 ('hexadecimal', 'mangled')
 				log: false,

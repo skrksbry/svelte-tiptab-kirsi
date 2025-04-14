@@ -41,6 +41,8 @@
     let editorElement: HTMLDivElement;
     let editor: Editor | null = null;
     let dragActive = false;
+    let isInternalDragStarted = false; // 내부 드래그 시작 감지 플래그
+    let dragTimer: number | null = null; // 드래그 상태 유지를 위한 타이머
     let uploadedImages: Writable<ImageInfo[]> = writable<ImageInfo[]>([...initialImages]);
     let content = initialContent;
     let isDarkMode = false; // 다크 모드 상태 저장 변수
@@ -182,19 +184,60 @@
 
     // 이미지 정보 리스트에 추가하고 이벤트 발생
     function addImageToList(imageInfo: ImageInfo) {
+        let finalImageInfo = { ...imageInfo };
+        
+        // 중복된 이름이 있는지 확인하고 처리
         uploadedImages.update(list => {
-            // 중복 체크 (같은 ID나 src를 가진 이미지가 있는지 확인)
-            if (!list.some(img => img.id === imageInfo.id || img.src === imageInfo.src)) {
-                return [...list, imageInfo];
+            // 동일한 이름의 이미지가 있는지 확인 (확장자 제외한 순수 파일명 비교)
+            const baseFileName = finalImageInfo.name.split('.')[0].replace(/\s*\(\d+\)$/, '');
+            
+            // 동일한 기본 이름을 가진 이미지들 필터링
+            const sameNameImages = list.filter(img => {
+                const imgBaseName = img.name.split('.')[0].replace(/\s*\(\d+\)$/, '');
+                return imgBaseName === baseFileName;
+            });
+            
+            if (sameNameImages.length > 0) {
+                // 확장자 분리
+                const nameParts = finalImageInfo.name.split('.');
+                const ext = nameParts.length > 1 ? `.${nameParts.pop()}` : '';
+                const baseName = nameParts.join('.').replace(/\s*\(\d+\)$/, '');
+                
+                // 현재 중복된 이름들에서 가장 큰 번호 찾기
+                const numbers = sameNameImages.map(img => {
+                    const match = img.name.match(/\((\d+)\)(?:\.\w+)?$/);
+                    return match ? parseInt(match[1], 10) : 0;
+                });
+                
+                console.log('기존 중복 이미지 번호들:', numbers);
+                
+                // 다음 번호 계산 (기존 번호 중 가장 큰 값 + 1)
+                const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+                
+                console.log(`새 이미지에 부여할 번호: (${nextNumber})`);
+                
+                // 새 이름 생성
+                finalImageInfo.name = `${baseName} (${nextNumber})${ext}`;
+                finalImageInfo.alt = finalImageInfo.name; // alt 텍스트도 업데이트
+            }
+            
+            // ID 중복 체크 (ID만 체크)
+            const isDuplicate = list.some(img => img.id === finalImageInfo.id);
+            
+            if (!isDuplicate) {
+                return [...list, finalImageInfo];
             }
             return list;
         });
-        hostElement?.dispatchEvent(new CustomEvent('changeImageList', { // hostElement에서 직접 dispatch
+        
+        hostElement?.dispatchEvent(new CustomEvent('changeImageList', {
             detail: { images: $uploadedImages },
             bubbles: true,
             composed: true
         }));
-        console.log('[KirsiEditor.svelte] Dispatched changeImageList from host after adding:', $uploadedImages);
+        console.log('[KirsiEditor.svelte] Dispatched changeImageList after adding:', $uploadedImages);
+        
+        return finalImageInfo; // 최종 이미지 정보 반환
     }
 
     // 본문에 이미지 삽입
@@ -209,7 +252,7 @@
     }
 
     // API를 통해 이미지를 업로드하는 함수
-    async function uploadImageToServer(file: File): Promise<{success: boolean, url?: string, error?: string}> {
+    async function uploadImageToServer(file: File): Promise<{success: boolean, url?: string, filename?: string, error?: string}> {
         if (!imageUploadEndpoint) {
             return { success: false, error: '업로드 엔드포인트가 설정되지 않았습니다.' };
         }
@@ -218,10 +261,12 @@
             const formData = new FormData();
             formData.append('image', file);
             
+            console.log('[KirsiEditor] 이미지 업로드 시작:', imageUploadEndpoint);
+            
             const response = await fetch(imageUploadEndpoint, {
                 method: 'POST',
                 body: formData,
-                // credentials: 'include', // 필요한 경우 주석 해제
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -229,15 +274,27 @@
             }
 
             const data = await response.json();
+            console.log('[KirsiEditor] 서버 응답 데이터:', data);
             
-            // 서버 응답 구조에 따라 URL을 추출하는 방식을 조정해야 할 수 있습니다.
-            // 여기서는 일반적인 { url: "이미지URL" } 형식을 가정합니다.
-            if (data && data.url) {
-                console.log('[KirsiEditor] 이미지 업로드 성공:', data.url);
-                return { success: true, url: data.url };
+            // 서버 응답 구조에 따라 URL을 추출하는 방식 조정
+            // { code: 200, filename: "파일명", location: "URL" } 형식 처리
+            if (data) {
+                const url = data.location || data.url; // location 또는 url 필드 사용
+                const filename = data.filename; // 서버에서 반환된 파일명
+                
+                if (url) {
+                    console.log('[KirsiEditor] 이미지 업로드 성공! URL:', url, '파일명:', filename);
+                    return { 
+                        success: true, 
+                        url: url,
+                        filename: filename // 서버에서 받은 파일명 전달
+                    };
+                } else {
+                    console.error('[KirsiEditor] 이미지 업로드 응답에 URL이 없습니다:', data);
+                    return { success: false, error: '서버 응답에 이미지 URL이 없습니다.' };
+                }
             } else {
-                console.error('[KirsiEditor] 이미지 업로드 응답에 URL이 없습니다:', data);
-                return { success: false, error: '서버 응답에 이미지 URL이 없습니다.' };
+                return { success: false, error: '서버 응답이 올바르지 않습니다.' };
             }
         } catch (error) {
             console.error('[KirsiEditor] 이미지 업로드 오류:', error);
@@ -259,30 +316,38 @@
         if (file) {
             // 이미지 업로드 엔드포인트가 설정되어 있으면 서버에 업로드
             if (imageUploadEndpoint) {
+                console.log('[KirsiEditor] 이미지 업로드 엔드포인트 사용:', imageUploadEndpoint);
                 const result = await uploadImageToServer(file);
+                console.log('[KirsiEditor] 업로드 결과:', result);
                 
                 if (result.success && result.url) {
                     // 서버에서 반환된 URL로 이미지 정보 생성
                     const imageInfo: ImageInfo = {
                         id: imageId,
                         src: result.url,
-                        alt: file.name,
-                        name: file.name,
+                        alt: result.filename || file.name, // 서버 반환 파일명 우선 사용
+                        name: result.filename || file.name, // 서버 반환 파일명 우선 사용
                         type: file.type,
                         size: file.size,
                     };
                     
-                    addImageToList(imageInfo);
-                    insertImageIntoEditor(imageId, result.url, file.name);
+                    console.log('[KirsiEditor] 이미지 정보 생성 완료:', imageInfo);
+                    const finalImageInfo = addImageToList(imageInfo);
+                    console.log('[KirsiEditor] 에디터에 이미지 삽입:', finalImageInfo);
+                    insertImageIntoEditor(finalImageInfo.id, finalImageInfo.src, finalImageInfo.alt);
+                    return; // 여기서 함수 종료 (중요!)
                 } else {
                     // 업로드 실패 시 fallback으로 base64 사용 (선택사항)
                     console.error('[KirsiEditor] 서버 업로드 실패, base64로 전환:', result.error);
-                    processImageAsBase64(file, imageId);
+                    // processImageAsBase64(file, imageId); - 주석 처리하고 에러만 표시
+                    alert('이미지 업로드에 실패했습니다: ' + result.error);
+                    return;
                 }
-            } else {
-                // 업로드 엔드포인트가 없으면 base64로 처리
-                processImageAsBase64(file, imageId);
             }
+            
+            // 업로드 엔드포인트가 없으면 base64로 처리
+            console.log('[KirsiEditor] 업로드 엔드포인트 없음, base64 처리');
+            processImageAsBase64(file, imageId);
         } else if (src) {
             const imageInfo: ImageInfo = {
                 id: imageId,
@@ -292,8 +357,8 @@
                 type: 'url', // URL 타입 표시
                 size: 0, // URL은 사이즈 측정 불가
             };
-            addImageToList(imageInfo);
-            insertImageIntoEditor(imageId, src, alt || '이미지');
+            const finalImageInfo = addImageToList(imageInfo);
+            insertImageIntoEditor(finalImageInfo.id, finalImageInfo.src, finalImageInfo.alt);
         }
     }
 
@@ -312,8 +377,8 @@
                     size: file.size,
                     file: file
                 };
-                addImageToList(imageInfo);
-                insertImageIntoEditor(imageId, result, file.name);
+                const finalImageInfo = addImageToList(imageInfo);
+                insertImageIntoEditor(finalImageInfo.id, finalImageInfo.src, finalImageInfo.alt);
             }
         };
         reader.onerror = (e) => {
@@ -396,37 +461,115 @@
     }
 
     // --- 드래그 앤 드롭 --- (탐색기 -> 에디터 만 허용)
-    function handleDragEnter(e: DragEvent) {
-        if (e.dataTransfer?.types.includes('Files')) {
-            e.preventDefault();
-            e.stopPropagation();
-            dragActive = true;
+    // 내부 이미지 드래그 시작 감지
+    function handleMouseDown(e: MouseEvent) {
+        if (e.target instanceof HTMLImageElement && editorElement.contains(e.target)) {
+            isInternalDragStarted = true;
         }
     }
-    function handleDragOver(e: DragEvent) {
-        if (e.dataTransfer?.types.includes('Files')) {
-            e.preventDefault();
-            e.stopPropagation();
-             e.dataTransfer.dropEffect = 'copy';
+    
+    function handleDragStart(e: DragEvent) {
+        if (e.target instanceof HTMLImageElement && editorElement.contains(e.target)) {
+            isInternalDragStarted = true;
         }
     }
-    function handleDragLeave(e: DragEvent) {
-        if (!editorElement.contains(e.relatedTarget as Node)) {
-            dragActive = false;
-        }
+    
+    function handleDragEnd() {
+        isInternalDragStarted = false;
     }
-    function handleDrop(e: DragEvent) {
-        if (e.dataTransfer?.types.includes('Files')) {
-            e.preventDefault();
-            e.stopPropagation();
-            dragActive = false;
 
-            const files = e.dataTransfer.files;
-            if (files && files.length > 0) {
-                for (const file of files) {
-                    if (file.type.startsWith('image/')) {
-                        handleAddImage({ detail: { file } } as CustomEvent<AddImageEventDetail>);
-                    }
+    function handleDragEnter(e: DragEvent) {
+        // 내부 드래그 체크
+        if (isInternalDragStarted || 
+            (e.target instanceof HTMLImageElement && editorElement.contains(e.target))) {
+            return; // 내부 이미지 드래그면 무시
+        }
+        
+        // Firefox와 Chrome 모두 지원하는 방식으로 파일 드래그 감지
+        const hasFiles = e.dataTransfer?.types.includes('Files') || 
+                         e.dataTransfer?.types.includes('application/x-moz-file');
+                         
+        // 항상 기본 동작 방지
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 명시적으로 dragActive 설정
+        if (hasFiles || e.dataTransfer?.items.length) {
+            dragActive = true;
+            
+            // 타이머가 있다면 제거
+            if (dragTimer) {
+                window.clearTimeout(dragTimer);
+                dragTimer = null;
+            }
+        }
+    }
+
+    function handleDragOver(e: DragEvent) {
+        // 내부 드래그 체크
+        if (isInternalDragStarted || 
+            (e.target instanceof HTMLImageElement && editorElement.contains(e.target))) {
+            return; // 내부 이미지 드래그면 무시
+        }
+        
+        // 항상 기본 이벤트 방지 (중요!)
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // dragActive 상태 유지
+        dragActive = true;
+        
+        // 타이머가 있다면 제거 (드래그 유지 중)
+        if (dragTimer) {
+            window.clearTimeout(dragTimer);
+            dragTimer = null;
+        }
+        
+        // 드롭 효과 설정
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    }
+    
+    function handleDragLeave(e: DragEvent) {
+        // 드래그가 에디터 전체 영역을 벗어났는지 확인
+        const wrapperElement = e.currentTarget as HTMLElement;
+        
+        // 정말로 wrapper를 벗어난 경우에만 드래그 상태 변경
+        if (!wrapperElement.contains(e.relatedTarget as Node)) {
+            // 약간의 지연 후에 드래그 상태 해제 (드롭 이벤트와 충돌 방지)
+            if (dragTimer) {
+                window.clearTimeout(dragTimer);
+            }
+            
+            dragTimer = window.setTimeout(() => {
+                // 문서 전체에 대한 드래그가 감지되지 않으면 드래그 상태 해제
+                if (!document.querySelector('.kirsi-editor-wrapper:hover')) {
+                    dragActive = false;
+                }
+                dragTimer = null;
+            }, 50);
+        }
+    }
+    
+    function handleDrop(e: DragEvent) {
+        // 내부 드래그 체크
+        if (isInternalDragStarted || 
+            (e.target instanceof HTMLImageElement && editorElement.contains(e.target))) {
+            isInternalDragStarted = false;
+            return; // 내부 이미지 드래그면 무시
+        }
+        
+        // 항상 기본 이벤트 방지
+        e.preventDefault();
+        e.stopPropagation();
+        dragActive = false;
+
+        // 파일이 있는지 확인
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            for (const file of e.dataTransfer.files) {
+                if (file.type.startsWith('image/')) {
+                    handleAddImage({ detail: { file } } as CustomEvent<AddImageEventDetail>);
                 }
             }
         }
@@ -451,7 +594,7 @@
             handle.className = 'resize-handle';
             wrapper.appendChild(handle);
 
-            // 리사이즈 시작 이벤트
+            // 마우스 이벤트 - 리사이즈 시작
             handle.addEventListener('mousedown', (e: MouseEvent) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -465,12 +608,39 @@
                 document.addEventListener('mouseup', stopResizing);
                 img.classList.add('resizing');
             });
+
+            // 터치 이벤트 - 리사이즈 시작
+            handle.addEventListener('touchstart', (e: TouchEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isResizing = true;
+                targetImage = img;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                startWidth = img.offsetWidth;
+                startHeight = img.offsetHeight;
+                document.addEventListener('touchmove', handleTouchResizing, { passive: false });
+                document.addEventListener('touchend', stopTouchResizing);
+                document.addEventListener('touchcancel', stopTouchResizing);
+                img.classList.add('resizing');
+            });
         });
     }
 
     function handleResizing(e: MouseEvent) {
         if (!isResizing || !targetImage) return;
         const dx = e.clientX - startX;
+        const newWidth = Math.max(50, startWidth + dx); // 최소 너비 50px
+        targetImage.style.width = `${newWidth}px`;
+        targetImage.style.height = 'auto';
+    }
+
+    function handleTouchResizing(e: TouchEvent) {
+        if (!isResizing || !targetImage) return;
+        // 스크롤 방지
+        e.preventDefault();
+        
+        const dx = e.touches[0].clientX - startX;
         const newWidth = Math.max(50, startWidth + dx); // 최소 너비 50px
         targetImage.style.width = `${newWidth}px`;
         targetImage.style.height = 'auto';
@@ -484,22 +654,38 @@
         targetImage.classList.remove('resizing');
 
         // Tiptap 상태 업데이트
-        if (editor) {
-            const { view } = editor;
-            const wrapper = targetImage.closest('.image-wrapper');
-            if (wrapper) {
-                const pos = view.posAtDOM(wrapper, 0);
-                if (pos !== undefined) {
-                     const transaction = editor.state.tr.setNodeMarkup(pos, undefined, {
-                        ...editor.state.doc.nodeAt(pos)?.attrs,
-                        width: targetImage.style.width || null, // 변경된 너비 저장
-                        height: 'auto' // 높이는 auto로 고정
-                    });
-                    view.dispatch(transaction);
-                }
+        updateImageSize();
+    }
+
+    function stopTouchResizing(e: TouchEvent) {
+        if (!isResizing || !targetImage) return;
+        isResizing = false;
+        document.removeEventListener('touchmove', handleTouchResizing);
+        document.removeEventListener('touchend', stopTouchResizing);
+        document.removeEventListener('touchcancel', stopTouchResizing);
+        targetImage.classList.remove('resizing');
+
+        // Tiptap 상태 업데이트
+        updateImageSize();
+    }
+
+    function updateImageSize() {
+        if (!targetImage || !editor) return;
+        
+        const { view } = editor;
+        const wrapper = targetImage.closest('.image-wrapper');
+        if (wrapper) {
+            const pos = view.posAtDOM(wrapper, 0);
+            if (pos !== undefined) {
+                 const transaction = editor.state.tr.setNodeMarkup(pos, undefined, {
+                    ...editor.state.doc.nodeAt(pos)?.attrs,
+                    width: targetImage.style.width || null, // 변경된 너비 저장
+                    height: 'auto' // 높이는 auto로 고정
+                });
+                view.dispatch(transaction);
             }
         }
-         targetImage = null;
+        targetImage = null;
     }
 
     // --- 라이프사이클 및 에디터 초기화 ---
@@ -507,6 +693,61 @@
         detectColorScheme();
         const cleanupColorSchemeListener = setupColorSchemeListener();
 
+        // 전역 드래그 이벤트 리스너 추가
+        const handleGlobalDragEnter = (e: DragEvent) => {
+            if (isInternalDragStarted) return;
+            
+            // 파일 드래그 감지
+            if (e.dataTransfer?.types.includes('Files') || 
+                e.dataTransfer?.types.includes('application/x-moz-file')) {
+                e.preventDefault();
+                dragActive = true;
+                
+                // 타이머가 이미 있으면 클리어
+                if (dragTimer) {
+                    window.clearTimeout(dragTimer);
+                    dragTimer = null;
+                }
+            }
+        };
+        
+        const handleGlobalDragOver = (e: DragEvent) => {
+            if (isInternalDragStarted) return;
+            
+            // 파일 드래그 유지 감지
+            if (e.dataTransfer?.types.includes('Files') || 
+                e.dataTransfer?.types.includes('application/x-moz-file')) {
+                e.preventDefault();
+                dragActive = true;
+                
+                // 타이머가 이미 있으면 클리어
+                if (dragTimer) {
+                    window.clearTimeout(dragTimer);
+                    dragTimer = null;
+                }
+            }
+        };
+        
+        const handleGlobalDragEnd = (e: DragEvent) => {
+            isInternalDragStarted = false;
+            
+            // 드래그 종료 시 약간의 지연 후 드래그 상태 해제
+            if (dragTimer) {
+                window.clearTimeout(dragTimer);
+            }
+            
+            dragTimer = window.setTimeout(() => {
+                dragActive = false;
+                dragTimer = null;
+            }, 50); // 짧은 지연으로 드롭 이벤트가 발생할 시간 확보
+        };
+        
+        // 문서 전체에 이벤트 리스너 추가
+        document.addEventListener('dragenter', handleGlobalDragEnter);
+        document.addEventListener('dragover', handleGlobalDragOver);
+        document.addEventListener('dragleave', handleGlobalDragEnd);
+        document.addEventListener('drop', handleGlobalDragEnd);
+        
         editor = new Editor({
             element: editorElement,
             extensions: [
@@ -620,6 +861,17 @@
 
         return () => {
             cleanupColorSchemeListener();
+            // 전역 이벤트 리스너 제거
+            document.removeEventListener('dragenter', handleGlobalDragEnter);
+            document.removeEventListener('dragover', handleGlobalDragOver);
+            document.removeEventListener('dragleave', handleGlobalDragEnd);
+            document.removeEventListener('drop', handleGlobalDragEnd);
+            
+            // 타이머 정리
+            if (dragTimer) {
+                window.clearTimeout(dragTimer);
+                dragTimer = null;
+            }
         };
     });
 
@@ -679,21 +931,31 @@
 
 </script>
 
-<div class="kirsi-editor-wrapper {themeClass}">
+<div 
+    class="kirsi-editor-wrapper {themeClass}"
+    on:dragenter={handleDragEnter}
+    on:dragleave={handleDragLeave}
+    on:dragover={handleDragOver}
+>
+    {#if dragActive}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div 
+            class="drop-overlay"
+            on:dragover={handleDragOver}
+            on:drop={handleDrop}
+        >
+            <div class="drop-message">이미지를 여기에 놓으세요</div>
+        </div>
+    {/if}
     {#if editor}
         <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} />
     {/if}
 
     <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} {isDarkMode} />
 
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="editor-container"
         class:drag-active={dragActive}
-        on:dragenter={handleDragEnter}
-        on:dragleave={handleDragLeave}
-        on:dragover={handleDragOver}
-        on:drop={handleDrop}
         style="max-height: {maxHeight}px;"
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -708,17 +970,16 @@
                         .run();
                 }
             }}
+            on:mousedown={handleMouseDown}
+            on:dragstart={handleDragStart}
+            on:dragend={handleDragEnd}
         ></div>
-        {#if dragActive}
-            <div class="drop-overlay">
-                <div class="drop-message">이미지를 여기에 놓으세요</div>
-            </div>
-        {/if}
     </div>
 </div>
 
 <style>
     .kirsi-editor-wrapper {
+        position: relative;
         border: 1px solid #e0e0e0;
         border-radius: 4px;
         display: flex;
@@ -749,7 +1010,7 @@
     }
 
     .editor-container {
-        position: relative; /* for drop overlay */
+        position: relative; /* 오버레이의 기준점 */
         flex-grow: 1;
         overflow-y: auto; /* 최대 높이를 초과할 경우에만 스크롤 활성화 */
     }
@@ -757,6 +1018,10 @@
     /* 다크 모드에서 에디터 컨테이너 */
     .kirsi-dark-theme .editor-container {
         background-color: #1e1e1e;
+    }
+
+    .editor-container.drag-active {
+        /* background-color: rgba(0, 120, 255, 0.05); */
     }
 
     .editor-content {
@@ -796,45 +1061,70 @@
     }
 
     /* 드래그 앤 드롭 오버레이 */
-    .editor-container.drag-active {
-        /* background-color: rgba(0, 120, 255, 0.05); */
-    }
     .drop-overlay {
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 120, 255, 0.1);
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 120, 255, 0.15); /* 더 진한 배경색 */
         display: flex;
         align-items: center;
         justify-content: center;
-        pointer-events: none; /* 중요: 드롭 이벤트가 하위 요소로 전달되도록 */
-        z-index: 10;
-        border: 2px dashed #007bff;
+        pointer-events: auto; /* 이벤트를 캡처하도록 변경 */
+        z-index: 10000; /* z-index 대폭 증가 */
+        border: 3px dashed #007bff; /* 더 굵은 테두리 */
         border-radius: 4px;
+        box-sizing: border-box;
+        animation: pulse 1.5s infinite alternate; /* 애니메이션 추가 */
     }
 
     /* 다크 모드 드롭 오버레이 조정 */
     .kirsi-dark-theme .drop-overlay {
-        background-color: rgba(0, 120, 255, 0.15);
+        background-color: rgba(0, 120, 255, 0.2);
         border-color: #60a5fa;
+        animation: pulse-dark 1.5s infinite alternate;
     }
 
+    /* 펄스 애니메이션 추가 */
+    @keyframes pulse {
+        from {
+            background-color: rgba(0, 120, 255, 0.1);
+        }
+        to {
+            background-color: rgba(0, 120, 255, 0.2);
+        }
+    }
+
+    /* 다크 모드 펄스 애니메이션 */
+    @keyframes pulse-dark {
+        from {
+            background-color: rgba(0, 120, 255, 0.15);
+        }
+        to {
+            background-color: rgba(0, 120, 255, 0.25);
+        }
+    }
+
+    /* 드롭 메시지 스타일 개선 */
     .drop-message {
         background-color: white;
         padding: 1rem 2rem;
         border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        font-size: 1.2rem;
         font-weight: bold;
         color: #007bff;
+        transform: translateY(-20px); /* 약간 위로 이동 */
     }
 
     /* 다크 모드 드롭 메시지 */
     .kirsi-dark-theme .drop-message {
         background-color: #2d2d2d;
         color: #60a5fa;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
     /* 이미지 리사이징 스타일 */

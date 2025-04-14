@@ -9,8 +9,7 @@ const ALLOWED_HOSTNAMES = [
 	'localhost', // 로컬 개발 환경
 	'127.0.0.1', // 로컬 개발 환경
 	'138.2.125.193',
-	'your-production-domain.com', // 실제 서비스 도메인
-	'staging.your-production-domain.com', // 스테이징 도메인 (필요한 경우)
+	'blog.silvercherry.io',
 ];
 
 class KirsiEditorElement extends HTMLElement {
