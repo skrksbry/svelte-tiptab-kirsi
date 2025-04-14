@@ -388,7 +388,7 @@
                          setTimeout(initializeImageResizing, 100);
                      }
                  }
-            }
+            },
         });
 
         // 초기 UI 설정
@@ -452,6 +452,7 @@
 
     <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} />
 
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="editor-container"
         class:drag-active={dragActive}
@@ -460,7 +461,18 @@
         on:dragover={handleDragOver}
         on:drop={handleDrop}
     >
-        <div bind:this={editorElement} class="editor-content"></div>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div 
+            bind:this={editorElement} 
+            class="editor-content"
+            on:click={(e) => {
+                if (!editor?.isFocused) {
+                    editor?.chain()
+                        .focus('end') // 마지막 위치에 커서를 위치시킴
+                        .run();
+                }
+            }}
+        ></div>
         {#if dragActive}
             <div class="drop-overlay">
                 <div class="drop-message">이미지를 여기에 놓으세요</div>
@@ -471,7 +483,7 @@
 
 <style>
     .kirsi-editor-wrapper {
-        border: 1px solid #ccc;
+        border: 1px solid #e0e0e0;
         border-radius: 4px;
         overflow: hidden;
         display: flex;
@@ -488,8 +500,9 @@
 
     .editor-content {
         padding: 1rem;
-        min-height: 200px; /* 최소 높이 설정 */
-         outline: none;
+        outline: none;
+        min-height: 420px;
+        cursor: text;
     }
 
      /* 기본 ProseMirror 스타일 */
@@ -617,4 +630,4 @@
 
     /* 외부에서 Highlight.js 테마 CSS 로드 (웹 컴포넌트 내부 주입 방식으로 변경됨) */
 
-</style> 
+</style>

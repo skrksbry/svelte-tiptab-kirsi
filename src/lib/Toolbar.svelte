@@ -45,6 +45,11 @@
 	// $: isCodeBlockActive = editor?.isActive('codeBlock'); // 반응형 선언 제거
 	let isCodeBlockActive = false; // 일반 변수로 변경
 
+	// 선택된 텍스트의 스타일 정보를 저장할 반응형 변수들
+	let selectedFontFamily = 'inherit';
+	let selectedFontSize = 'inherit';
+	let selectedColor = '#000000';
+
 	// 클릭 외부 감지 (Shadow DOM 고려)
 	function handleClickOutside(event: Event) {
 		if (!toolbarEl) return;
@@ -91,6 +96,7 @@
 	}
 
 	const fontFamilies = [
+		{ name: 'Pretendard', value: 'Pretendard' },
 		{ name: '기본', value: 'inherit' },
 		{ name: '고딕', value: 'sans-serif' },
 		{ name: '명조', value: 'serif' },
@@ -265,11 +271,22 @@
 		return editor?.isActive(type, options) ?? false;
 	}
 
+	// 스타일 정보 업데이트 함수
+	function updateSelectedStyles() {
+		if (!editor) return;
+		
+		const attrs = editor.getAttributes('textStyle');
+		selectedFontFamily = attrs.fontFamily || 'inherit';
+		selectedFontSize = attrs.fontSize || 'inherit';
+		selectedColor = attrs.color || '#000000';
+	}
+
 	// --- 에디터 이벤트 리스너 설정 --- 
 	function updateToolbarState() {
+		console.log("[Toolbar] Updating toolbar state...");
 		if (!editor) return;
 		isCodeBlockActive = editor.isActive('codeBlock');
-		// 필요한 다른 상태들도 여기서 업데이트 가능 (예: 현재 폰트 크기 등)
+		updateSelectedStyles(); // 스타일 정보 업데이트 추가
 	}
 
 	onMount(() => {
@@ -342,27 +359,25 @@
 	<!-- 폰트 관련 -->
 	<div class="toolbar-group">
 		<!-- 폰트 종류 -->
-		<div class="dropdown font-picker-container">
-            <button on:click|stopPropagation={() => toggleDropdown('fontPicker')} title="글꼴">
-                <Type size={18} />
-				<span class="current-font">{ fontFamilies.find(f => f.value === getCurrentFontFamily())?.name || '기본' }</span>
-			</button>
-			{#if showFontPicker}
-                <div class="dropdown-content font-picker-content">
-                    {#each fontFamilies as font}
-                        <button on:click={() => setFontFamily(font.value)} style="font-family: {font.value}">
-                            {font.name}
-                        </button>
-                    {/each}
-                </div>
-            {/if}
+		<div class="toolbar-group">
+			<select 
+				value={selectedFontFamily} 
+				on:change={(e) => setFontFamily(e.currentTarget.value)}
+				style="font-family: {selectedFontFamily}"
+			>
+				{#each fontFamilies as font}
+					<option value={font.value} style="font-family: {font.value}">
+						{font.name}
+					</option>
+				{/each}
+			</select>
 		</div>
 
 		<!-- 폰트 크기 -->
         <div class="dropdown font-size-container">
             <button on:click|stopPropagation={() => toggleDropdown('fontSizePicker')} title="글자 크기" class="font-size-btn">
                 <CaseSensitive size={18} />
-                <span>{getCurrentFontSize() === 'inherit' ? '크기' : getCurrentFontSize()}</span>
+                <span>{selectedFontSize === 'inherit' ? '크기' : selectedFontSize}</span>
             </button>
             {#if showFontSizePicker}
                 <div class="dropdown-content font-size-content">
@@ -385,11 +400,11 @@
 		<div class="dropdown color-picker-container">
 			<button on:click|stopPropagation={() => toggleDropdown('colorPicker')} title="글자 색">
 				<Palette size={18} />
-                <span class="color-indicator" style="background-color: {editor?.getAttributes('textStyle').color || '#000000'};"></span>
+                <span class="color-indicator" style="background-color: {selectedColor};"></span>
 			</button>
 			{#if showColorPicker}
                 <div class="dropdown-content color-picker-content">
-                    <input type="color" on:input={(e) => setColor(e.currentTarget.value)} value={editor?.getAttributes('textStyle').color || '#000000'} on:click|stopPropagation />
+                    <input type="color" on:input={(e) => setColor(e.currentTarget.value)} value={selectedColor} on:click|stopPropagation />
                 </div>
             {/if}
 		</div>
@@ -540,15 +555,26 @@
         gap: 4px;
     }
 
-	/* 폰트 드롭다운 */
-    .current-font {
-        font-size: 12px;
-        margin-left: 2px;
-        max-width: 60px; /* 너무 길어지지 않도록 */
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+	/* 폰트 선택 select 스타일 */
+	select {
+		height: 28px;
+		padding: 0 8px;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		background-color: white;
+		cursor: pointer;
+		font-size: 13px;
+		min-width: 120px;
+	}
+
+	select:hover {
+		background-color: #f5f5f5;
+	}
+
+	select option {
+		padding: 8px;
+		font-size: 13px;
+	}
 
 	/* 폰트 크기 드롭다운 */
     .font-size-btn span {
@@ -693,4 +719,4 @@
         padding: 5px 8px;
      }
 
-</style> 
+</style>
