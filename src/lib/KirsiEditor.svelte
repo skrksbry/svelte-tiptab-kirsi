@@ -35,6 +35,7 @@
     export let darkMode: boolean | null = null; // 다크 모드 상태를 외부에서 명시적으로 지정할 수 있는 prop
     export let imageUploadEndpoint: string | null = null; // 이미지 업로드 API 엔드포인트
     export let maxHeight: string | number = 600; // 에디터 최대 높이 (기본 600px)
+    export let minHeight: string | number = 400; // 에디터 최소 높이 (기본 400px)
 
     // State
     let editorElement: HTMLDivElement;
@@ -606,6 +607,15 @@
             (shadowHost.host as any).getImageUploadEndpoint = () => {
                 return imageUploadEndpoint;
             };
+            // 최소 높이 설정 메소드 추가
+            (shadowHost.host as any).setMinHeight = (height: string | number) => {
+                minHeight = height;
+                console.log('[KirsiEditor] 에디터 최소 높이 설정:', height);
+            };
+            // 현재 최소 높이 확인 메소드 추가
+            (shadowHost.host as any).getMinHeight = () => {
+                return minHeight;
+            };
          }
 
         return () => {
@@ -657,6 +667,16 @@
         return imageUploadEndpoint;
     }
 
+    // 최소 높이 설정 함수 추가
+    export function setMinHeight(height: string | number): void {
+        minHeight = height;
+    }
+    
+    // 현재 최소 높이 반환 함수 추가
+    export function getMinHeight(): string | number {
+        return minHeight;
+    }
+
 </script>
 
 <div class="kirsi-editor-wrapper {themeClass}">
@@ -680,6 +700,7 @@
         <div 
             bind:this={editorElement} 
             class="editor-content"
+            style="min-height: {minHeight}px;"
             on:click={(e) => {
                 if (!editor?.isFocused) {
                     editor?.chain()
@@ -704,7 +725,6 @@
         flex-direction: column;
         width: 100%;
         height: auto; /* 컨텐츠에 맞게 자동 조절되도록 변경 */
-        min-height: 500px; /* 최소 높이 설정 */
     }
 
     /* 라이트 모드 스타일 (기본) */
@@ -742,7 +762,6 @@
     .editor-content {
         padding: 1rem;
         outline: none;
-        min-height: 100px; /* 최소 높이 줄임 */
         height: auto; /* 컨텐츠에 따라 자동으로 높이 조절 */
         cursor: text;
     }
