@@ -18,11 +18,46 @@
 		CaseSensitive,
 		Type,
 		FileCode,
+		ChevronDown,
 	} from 'lucide-svelte';
 	import { onMount, onDestroy } from 'svelte';
 
 	export let editor: Editor;
 	export let isDarkMode: boolean = false; // 다크 모드 상태를 받아오는 prop 추가
+	export let toolbarOptions: ToolbarOptions = {}; // 툴바 옵션 객체 추가
+
+	// 툴바 옵션 인터페이스 정의
+	interface ToolbarOptions {
+		basicFormatting?: boolean;
+		headings?: boolean;
+		lists?: boolean;
+		fontOptions?: boolean;
+		fontFamily?: boolean;
+		fontSize?: boolean;
+		fontColor?: boolean;
+		inlineObjects?: boolean;
+		links?: boolean;
+		images?: boolean;
+		codeBlock?: boolean;
+	}
+	
+	// 툴바 옵션 기본값 설정 (모두 활성화)
+	const defaultOptions: ToolbarOptions = {
+		basicFormatting: true, // 굵게, 기울임, 밑줄, 취소선
+		headings: true, // 제목 1, 2, 3
+		lists: true, // 글머리 기호, 번호 매기기
+		fontOptions: true, // 폰트 관련 모든 옵션
+		fontFamily: true, // 글꼴
+		fontSize: true, // 글자 크기
+		fontColor: true, // 글자 색
+		inlineObjects: true, // 링크, 이미지, 코드 블록 등
+		links: true, // 링크
+		images: true, // 이미지
+		codeBlock: true, // 코드 블록
+	};
+	
+	// 툴바 옵션 병합 (기본값 + 사용자 정의 옵션)
+	const mergedOptions: ToolbarOptions = { ...defaultOptions, ...toolbarOptions };
 
 	interface AddImageDetail {
 		file?: File;
@@ -105,8 +140,10 @@
 		}
 
         // 클릭된 요소가 드롭다운 토글 버튼이거나 드롭다운 컨텐츠 내부가 아니면 닫기
-        const isToggleButton = (target as HTMLElement).closest('.dropdown > button');
-        const isDropdownContent = (target as HTMLElement).closest('.dropdown-content'); // 컬러피커 제외
+        const isToggleButton = (target as HTMLElement).closest('.dropdown > button') || 
+                               (target as HTMLElement).closest('.custom-select-button');
+        const isDropdownContent = (target as HTMLElement).closest('.dropdown-content') || 
+                                 (target as HTMLElement).closest('.custom-select-menu');
         
         if (!isToggleButton && !isDropdownContent) {
              console.log("[Toolbar] Clicked outside dropdown toggle/content, closing dropdowns.");
@@ -141,6 +178,7 @@
 	];
 
 	const fontSizes = [
+		{ name: '기본 크기', value: 'inherit' },
 		{ name: '10px', value: '10px' },
 		{ name: '12px', value: '12px' },
 		{ name: '14px', value: '14px' },
@@ -207,6 +245,7 @@
         } else {
 		    editor?.chain().focus().setFontSize(fontSize).run();
         }
+		closeAllDropdowns(); // 닫기
 	}
 
 	function setCustomFontSize() {
@@ -299,6 +338,220 @@
 		updateSelectedStyles(); // 스타일 정보 업데이트 추가
 	}
 
+	// 커스텀 셀렉트 박스 핸들러 함수
+	function handleCustomSelect(event: MouseEvent, type: 'fontFamily' | 'fontSize') {
+		event.preventDefault();
+		event.stopPropagation();
+		
+		// 현재 열려있는 메뉴 확인 및 닫기
+		const existingMenus = document.querySelectorAll('.custom-select-menu');
+		existingMenus.forEach(menu => menu.remove());
+		
+		// 버튼 요소 가져오기
+		const button = event.currentTarget as HTMLElement;
+		
+		// 이미 열려있는 메뉴 확인 - 같은 버튼 클릭 시 닫고 종료
+		const existingMenu = document.querySelector(`.custom-select-menu[data-type="${type}"]`);
+		if (existingMenu) {
+			existingMenu.remove();
+			return;
+		}
+		
+		// 메뉴 생성
+		const menu = document.createElement('div');
+		menu.className = `custom-select-menu ${isDarkMode ? 'dark' : 'light'}`;
+		menu.dataset.type = type;
+		
+		// 메뉴 위치 계산해서 설정
+		const buttonRect = button.getBoundingClientRect();
+		menu.style.position = 'fixed';
+		menu.style.top = `${buttonRect.bottom}px`;
+		menu.style.left = `${buttonRect.left}px`;
+		menu.style.zIndex = '1000';
+		menu.style.borderRadius = '4px';
+		menu.style.overflow = 'hidden';
+		menu.style.minWidth = '160px';
+		menu.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
+		menu.style.fontSize = '12px';
+		
+		if (isDarkMode) {
+			menu.style.backgroundColor = '#333';
+			menu.style.border = '1px solid #555';
+			menu.style.color = '#e0e0e0';
+		} else {
+			menu.style.backgroundColor = 'white';
+			menu.style.border = '1px solid #ddd';
+			menu.style.color = '#333';
+		}
+		
+		// 옵션 목록 생성
+		const options = type === 'fontFamily' ? fontFamilies : fontSizes;
+		
+		options.forEach(option => {
+			const optionEl = document.createElement('div');
+			optionEl.className = 'custom-select-option';
+			
+			// 폰트 패밀리 옵션은 해당 폰트로 스타일 적용
+			if (type === 'fontFamily') {
+				optionEl.style.fontFamily = option.value;
+			}
+			
+			optionEl.textContent = option.name;
+			optionEl.style.padding = '7px 10px';
+			optionEl.style.cursor = 'pointer';
+			optionEl.style.fontSize = '12px';
+			optionEl.style.overflow = 'hidden';
+			optionEl.style.textOverflow = 'ellipsis';
+			optionEl.style.whiteSpace = 'nowrap';
+			
+			// 현재 선택된 옵션 표시
+			const currentValue = type === 'fontFamily' ? selectedFontFamily : selectedFontSize;
+			if (option.value === currentValue) {
+				optionEl.classList.add('selected');
+				optionEl.style.fontWeight = 'bold';
+				if (isDarkMode) {
+					optionEl.style.backgroundColor = '#444';
+				} else {
+					optionEl.style.backgroundColor = '#f0f0f0';
+				}
+			}
+			
+			// 호버 효과 스타일 추가
+			optionEl.addEventListener('mouseover', () => {
+				if (isDarkMode) {
+					optionEl.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+				} else {
+					optionEl.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+				}
+			});
+			
+			optionEl.addEventListener('mouseout', () => {
+				// 선택된 항목이 아닐 경우에만 배경색 초기화
+				if (!optionEl.classList.contains('selected')) {
+					optionEl.style.backgroundColor = '';
+				} else {
+					if (isDarkMode) {
+						optionEl.style.backgroundColor = '#444';
+					} else {
+						optionEl.style.backgroundColor = '#f0f0f0';
+					}
+				}
+			});
+			
+			// 옵션 클릭 이벤트
+			optionEl.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				if (type === 'fontFamily') {
+					setFontFamily(option.value);
+				} else {
+					setFontSize(option.value);
+				}
+				
+				menu.remove();
+			});
+			
+			menu.appendChild(optionEl);
+		});
+		
+		// 사용자 정의 폰트 크기 입력 필드 (fontSize 메뉴에만 추가)
+		if (type === 'fontSize') {
+			const customSizeContainer = document.createElement('div');
+			customSizeContainer.className = 'custom-size-container';
+			customSizeContainer.style.display = 'flex';
+			customSizeContainer.style.gap = '4px';
+			customSizeContainer.style.padding = '6px 10px';
+			customSizeContainer.style.borderTop = isDarkMode ? '1px solid #555' : '1px solid #eee';
+			customSizeContainer.style.marginTop = '4px';
+			
+			const customSizeInput = document.createElement('input');
+			customSizeInput.type = 'text';
+			customSizeInput.value = customFontSize;
+			customSizeInput.placeholder = 'Custom size';
+			customSizeInput.style.flex = '1';
+			customSizeInput.style.padding = '4px 8px';
+			customSizeInput.style.borderRadius = '4px';
+			customSizeInput.style.fontSize = '12px';
+			
+			if (isDarkMode) {
+				customSizeInput.style.border = '1px solid #666';
+				customSizeInput.style.backgroundColor = '#444';
+				customSizeInput.style.color = '#e0e0e0';
+			} else {
+				customSizeInput.style.border = '1px solid #ccc';
+				customSizeInput.style.backgroundColor = 'white';
+				customSizeInput.style.color = '#333';
+			}
+			
+			customSizeInput.addEventListener('input', (e) => {
+				customFontSize = (e.target as HTMLInputElement).value;
+			});
+			
+			const customSizeButton = document.createElement('button');
+			customSizeButton.textContent = '적용';
+			customSizeButton.style.padding = '3px 6px';
+			customSizeButton.style.borderRadius = '4px';
+			customSizeButton.style.fontSize = '12px';
+			customSizeButton.style.whiteSpace = 'nowrap';
+			
+			if (isDarkMode) {
+				customSizeButton.style.backgroundColor = '#555';
+				customSizeButton.style.border = '1px solid #666';
+				customSizeButton.style.color = '#e0e0e0';
+			} else {
+				customSizeButton.style.backgroundColor = '#eee';
+				customSizeButton.style.border = '1px solid #ccc';
+				customSizeButton.style.color = '#333';
+			}
+			
+			// 호버 효과 스타일 추가
+			customSizeButton.addEventListener('mouseover', () => {
+				if (isDarkMode) {
+					customSizeButton.style.backgroundColor = '#666';
+				} else {
+					customSizeButton.style.backgroundColor = '#ddd';
+				}
+			});
+			
+			customSizeButton.addEventListener('mouseout', () => {
+				if (isDarkMode) {
+					customSizeButton.style.backgroundColor = '#555';
+				} else {
+					customSizeButton.style.backgroundColor = '#eee';
+				}
+			});
+			
+			customSizeButton.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				setCustomFontSize();
+				menu.remove();
+			});
+			
+			customSizeContainer.appendChild(customSizeInput);
+			customSizeContainer.appendChild(customSizeButton);
+			menu.appendChild(customSizeContainer);
+		}
+		
+		// 메뉴를 body에 추가
+		document.body.appendChild(menu);
+		
+		// 문서 클릭시 메뉴 닫기
+		const closeMenu = (e: MouseEvent) => {
+			const clickTarget = e.target as HTMLElement;
+			if (!menu.contains(clickTarget) && clickTarget !== button && !button.contains(clickTarget)) {
+				menu.remove();
+				document.removeEventListener('click', closeMenu);
+			}
+		};
+		
+		// 이벤트 등록 (setTimeout으로 현재 클릭 이벤트와 충돌 방지)
+		setTimeout(() => {
+			document.addEventListener('click', closeMenu);
+		}, 0);
+	}
+
 	onMount(() => {
 		if (editor) {
 			editor.on('transaction', updateToolbarState);
@@ -328,12 +581,16 @@
 			// 글로벌 마우스업 이벤트 제거
 			document.removeEventListener('mouseup', handleColorPickerMouseUp);
 		}
+		
+		// 남아있는 커스텀 셀렉트 메뉴 정리
+		document.querySelectorAll('.custom-select-menu').forEach(menu => menu.remove());
 	});
 
 </script>
 
 <div class="toolbar {isDarkMode ? 'toolbar-dark' : 'toolbar-light'}" bind:this={toolbarEl}>
-	<!-- 기본 서식 -->
+	<!-- 기본 서식 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.basicFormatting}
 	<div class="toolbar-group">
 		<button class:active={isActive('bold')} on:click={toggleBold} title="굵게">
 			<Bold size={18} />
@@ -348,8 +605,10 @@
 			<Strikethrough size={18} />
 		</button>
 	</div>
+	{/if}
 
-	<!-- 헤딩 -->
+	<!-- 헤딩 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.headings}
 	<div class="toolbar-group">
 		<button class:active={isActive('heading', { level: 1 })} on:click={() => setHeading(1)} title="제목 1">
 			<Heading1 size={18} />
@@ -361,8 +620,10 @@
 			<Heading3 size={18} />
 		</button>
 	</div>
+	{/if}
 
-	<!-- 목록 -->
+	<!-- 목록 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.lists}
 	<div class="toolbar-group">
 		<button class:active={isActive('bulletList')} on:click={toggleBulletList} title="글머리 기호">
 			<List size={18} />
@@ -371,46 +632,47 @@
 			<ListOrdered size={18} />
 		</button>
 	</div>
+	{/if}
 
-	<!-- 폰트 관련 -->
+	<!-- 폰트 관련 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.fontOptions && (mergedOptions.fontFamily || mergedOptions.fontSize || mergedOptions.fontColor)}
 	<div class="toolbar-group">
-		<!-- 폰트 종류 -->
-		<div class="toolbar-group font-family-container">
-			<div class="font-icon-wrapper">
-				<Type size={18} />
-			</div>
-			<select 
-				value={selectedFontFamily} 
-				on:change={(e) => setFontFamily(e.currentTarget.value)}
-				style="font-family: {selectedFontFamily}"
+		<!-- 폰트 종류 - 커스텀 셀렉트로 변경 -->
+		{#if mergedOptions.fontFamily}
+		<div class="custom-select font-family-container">
+			<button 
+				class="custom-select-button"
+				on:click={(e) => handleCustomSelect(e, 'fontFamily')}
+				title="글꼴"
 			>
-				{#each fontFamilies as font}
-					<option value={font.value} style="font-family: {font.value}">
-						{font.name}
-					</option>
-				{/each}
-			</select>
+				<Type size={18} />
+				<span class="custom-select-value" style="font-family: {selectedFontFamily}">
+					{fontFamilies.find(f => f.value === selectedFontFamily)?.name || '기본'}
+				</span>
+				<ChevronDown size={14} />
+			</button>
 		</div>
+		{/if}
 
-		<!-- 폰트 크기 - select box로 교체 -->
-        <div class="toolbar-group font-size-container">
-            <div class="font-icon-wrapper">
-                <CaseSensitive size={18} />
-            </div>
-            <select 
-                value={selectedFontSize}
-                on:change={(e) => setFontSize(e.currentTarget.value)}
-            >
-                <option value="inherit">기본 크기</option>
-                {#each fontSizes as size}
-                    <option value={size.value}>
-                        {size.name}
-                    </option>
-                {/each}
-            </select>
-        </div>
+		<!-- 폰트 크기 - 커스텀 셀렉트로 변경 -->
+		{#if mergedOptions.fontSize}
+		<div class="custom-select font-size-container">
+			<button 
+				class="custom-select-button"
+				on:click={(e) => handleCustomSelect(e, 'fontSize')}
+				title="글자 크기"
+			>
+				<CaseSensitive size={18} />
+				<span class="custom-select-value">
+					{selectedFontSize === 'inherit' ? '기본 크기' : selectedFontSize}
+				</span>
+				<ChevronDown size={14} />
+			</button>
+		</div>
+		{/if}
 
 		<!-- 폰트 색상 -->
+		{#if mergedOptions.fontColor}
 		<div class="dropdown color-picker-container">
 			<button on:click|stopPropagation={() => toggleDropdown('colorPicker')} title="글자 색">
 				<Palette size={18} />
@@ -440,11 +702,15 @@
                 </div>
             {/if}
 		</div>
+		{/if}
 	</div>
+	{/if}
 
-	<!-- 링크, 이미지, 코드 블록 -->
+	<!-- 링크, 이미지, 코드 블록 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.inlineObjects && (mergedOptions.links || mergedOptions.images || mergedOptions.codeBlock)}
 	<div class="toolbar-group">
 		<!-- 링크 -->
+		{#if mergedOptions.links}
 		<div class="dropdown link-form-container">
 			<button class:active={isActive('link')} on:click|stopPropagation={() => toggleDropdown('linkForm')} title="링크">
 				<Link size={18} />
@@ -457,28 +723,24 @@
                 </div>
             {/if}
 		</div>
+		{/if}
 
 		<!-- 이미지 -->
-		<div class="dropdown image-form-container">
-			<button on:click|stopPropagation={() => toggleDropdown('imageForm')} title="이미지">
-				<Image size={18} />
-			</button>
-			{#if showImageForm}
-                <div class="dropdown-content image-form-content">
-                    <input type="text" bind:value={imageUrl} placeholder="이미지 URL 입력" on:click|stopPropagation />
-                    <button on:click={addImageFromUrl}>URL로 추가</button>
-                    <hr />
-                    <label for="image-file-upload" class="file-upload-label">파일에서 추가:</label>
-                    <input id="image-file-upload" type="file" accept="image/*" on:change={addImageFromFile} on:click|stopPropagation />
-                </div>
-            {/if}
-		</div>
+		{#if mergedOptions.images}
+		<label class="file-input-button" title="이미지 첨부">
+			<Image size={18} />
+			<input type="file" accept="image/*" on:change={addImageFromFile} />
+		</label>
+		{/if}
 
 		<!-- 코드 블록 -->
+		{#if mergedOptions.codeBlock}
 		<button class:active={isCodeBlockActive} on:click={toggleCodeBlock} title="코드 블록">
 			<Code size={18} />
 		</button>
+		{/if}
 	</div>
+	{/if}
 </div>
 
 <style>
@@ -648,114 +910,63 @@
         gap: 4px;
     }
 
+	/* 커스텀 셀렉트 스타일 */
+    .custom-select {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .custom-select-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+        border: none;
+        background: transparent;
+        transition: background-color 0.2s;
+    }
+    
+    .toolbar-light .custom-select-button:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .toolbar-dark .custom-select-button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .custom-select-value {
+        font-size: 13px;
+        min-width: 60px;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: left;
+    }
+    
+    /* 작은 화면에서 select 요소 너비 줄임 */
+    @media (max-width: 480px) {
+        .custom-select-value {
+            min-width: 40px;
+            max-width: 90px;
+            font-size: 12px;
+        }
+        
+        .custom-select-button {
+            padding: 4px 6px;
+        }
+    }
+
 	/* 폰트 선택 wrapper 스타일 추가 */
-    .font-family-container {
+    .font-family-container, .font-size-container {
 		display: flex;
 		align-items: center;
 		gap: 4px;
         flex-shrink: 0; /* 폰트 선택 영역이 줄어들지 않도록 */
-	}
-    
-    .font-size-container {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex-shrink: 0; /* 폰트 크기 선택 영역이 줄어들지 않도록 */
-    }
-
-	/* 폰트 선택 select 스타일 */
-	select {
-		height: 28px;
-		padding: 0 8px;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 13px;
-		min-width: 120px;
-        max-width: 150px; /* 최대 너비 제한 */
-        width: auto; /* 내용에 맞게 너비 조정 */
-	}
-
-    /* 작은 화면에서 select 요소 너비 줄임 */
-    @media (max-width: 480px) {
-        select {
-            min-width: 90px;
-            font-size: 12px;
-            padding: 0 4px;
-        }
-    }
-
-    /* 옵션 스타일링 */
-    .toolbar-light select option {
-        background-color: white;
-        color: #333;
-    }
-
-    .toolbar-dark select option {
-        background-color: #333;
-        color: #e0e0e0;
-    }
-
-	select option {
-		padding: 8px;
-		font-size: 13px;
-	}
-
-	/* 폰트 크기 드롭다운 - 필요한 스타일은 남김 */
-    .font-size-btn span {
-        font-size: 12px;
-        min-width: 30px; /* 최소 너비 확보 */
-        text-align: center;
-    }
-	.font-size-content {
-		min-width: 180px;
-	}
-	.custom-font-size {
-		display: flex;
-		gap: 4px;
-		margin-bottom: 8px;
-        align-items: center;
-	}
-	.custom-font-size input {
-		flex: 1;
-		padding: 4px 8px;
-		border-radius: 4px;
-        font-size: 12px;
-        width: 60px;
-	}
-
-    /* 라이트/다크 모드 input 스타일 */
-    .toolbar-light .custom-font-size input {
-        border: 1px solid #ccc;
-        background-color: white;
-        color: #333;
-    }
-
-    .toolbar-dark .custom-font-size input {
-        border: 1px solid #555;
-        background-color: #444;
-        color: #e0e0e0;
-    }
-
-    .custom-font-size button {
-        white-space: nowrap;
-        padding: 4px 8px;
-        font-size: 12px;
-        width: auto;
-        height: auto;
-    }
-	.font-size-presets {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 4px;
-		max-height: 200px; /* 스크롤 높이 제한 */
-		overflow-y: auto;
-	}
-	.font-size-presets button {
-        font-size: 12px; /* 프리셋 버튼 폰트 크기 */
-        padding: 4px;
-        text-align: center;
-        width: 100%;
-        height: auto;
 	}
 
 	/* 색상 선택 드롭다운 */
@@ -967,5 +1178,56 @@
             width: 100%;
             max-width: 280px;
         }
+    }
+
+    /* 파일 입력 버튼 스타일 */
+    .file-input-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 4px 6px;
+        height: 28px;
+        min-width: 28px;
+    }
+
+    .file-input-button input[type="file"] {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .toolbar-light .file-input-button {
+        color: #333;
+    }
+
+    .toolbar-light .file-input-button:hover {
+        background-color: #e0e0e0;
+    }
+
+    .toolbar-light .file-input-button.active {
+        background-color: #d0d0d0;
+        border-color: #aaa;
+    }
+
+    .toolbar-dark .file-input-button {
+        color: #e0e0e0;
+    }
+
+    .toolbar-dark .file-input-button:hover {
+        background-color: #444;
+    }
+
+    .toolbar-dark .file-input-button.active {
+        background-color: #555;
+        border-color: #777;
     }
 </style>

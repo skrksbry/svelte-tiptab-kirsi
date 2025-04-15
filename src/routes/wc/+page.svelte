@@ -11,12 +11,32 @@
         setDarkMode: (darkModeEnabled: boolean) => void; // 다크 모드 설정 메서드 추가
         isDarkMode: () => boolean; // 다크 모드 상태 확인 메서드 추가
         useAutoDarkMode: () => void; // 자동 다크 모드 설정 메서드 추가
+        setToolbarOptions: (options: Record<string, boolean>) => void; // 툴바 옵션 설정 메서드 추가
+        getToolbarOptions: () => Record<string, boolean>; // 현재 툴바 옵션 확인 메서드 추가
     }
 
     let editorRef: KirsiEditorElement | null = null;
     let currentContent = '<p>Web Component Loaded!</p>';
     let currentImages: any[] = [];
     let isDarkMode = true; // 초기값을 다크모드로 설정
+    
+    // 이미지, 제목, 굵게만 활성화하고 나머지 메뉴는 비활성화하는 툴바 옵션
+    const customToolbarOptions = {
+        basicFormatting: true, // 기본 서식(굵게 등) 비활성화 후 개별 설정
+        headings: true, // 제목 활성화
+        lists: false, // 목록 비활성화
+        fontOptions: false, // 폰트 관련 옵션 비활성화
+        fontFamily: false, // 글꼴 비활성화
+        fontSize: false, // 글자 크기 비활성화
+        fontColor: false, // 글자 색 비활성화
+        inlineObjects: true, // 인라인 객체(링크, 이미지 등) 비활성화 후 개별 설정
+        links: false, // 링크 비활성화
+        images: true, // 이미지 활성화
+        codeBlock: false, // 코드 블록 비활성화
+    };
+    
+    // JSON 문자열로 변환하여 웹 컴포넌트에 전달
+    const toolbarOptionsStr = JSON.stringify(customToolbarOptions);
     
     // 페이지 로드 시 다크모드 적용
     function applyDarkMode(dark: boolean) {
@@ -144,7 +164,7 @@
     <div class="editor-container">
         <!-- 웹 컴포넌트 사용 -->
         <!-- svelte-ignore a11y-missing-attribute -->
-        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} image-upload-endpoint="http://138.2.125.193:4000/images/upload"></kirsi-editor>
+        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} toolbar-options={toolbarOptionsStr} image-upload-endpoint="http://138.2.125.193:4000/images/upload"></kirsi-editor>
     </div>
 
     <div class="controls">

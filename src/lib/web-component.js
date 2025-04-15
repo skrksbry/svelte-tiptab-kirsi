@@ -10,6 +10,7 @@ const ALLOWED_HOSTNAMES = [
 	'127.0.0.1', // 로컬 개발 환경
 	'138.2.125.193',
 	'blog.silvercherry.io',
+	'curly-potato-55jrj56gj5h7x7v-5174.app.github.dev',
 ];
 
 class KirsiEditorElement extends HTMLElement {
@@ -22,6 +23,7 @@ class KirsiEditorElement extends HTMLElement {
 	_imageUploadEndpoint = null; // 이미지 업로드 API 엔드포인트
 	_maxHeight = 600; // 에디터 최대 높이 (기본 600px)
 	_minHeight = 400; // 최소 높이 추가
+	_toolbarOptions = {}; // 툴바 옵션 객체 추가
 
 	static get observedAttributes() {
 		return [
@@ -31,6 +33,7 @@ class KirsiEditorElement extends HTMLElement {
 			'image-upload-endpoint',
 			'max-height',
 			'min-height', // 최소 높이 속성 추가
+			'toolbar-options', // 툴바 옵션 속성 추가
 		];
 	}
 
@@ -92,6 +95,9 @@ class KirsiEditorElement extends HTMLElement {
 		// --- 최소 높이 초기 설정 ---
 		this._initMinHeight();
 
+		// --- 툴바 옵션 초기 설정 ---
+		this._initToolbarOptions();
+
 		try {
 			// Svelte 5: mount 함수 사용
 			const mountedComponent = mount(KirsiEditor, {
@@ -105,6 +111,7 @@ class KirsiEditorElement extends HTMLElement {
 						this._imageUploadEndpoint, // 이미지 업로드 엔드포인트 전달
 					maxHeight: this._maxHeight, // 최대 높이 전달
 					minHeight: this._minHeight, // 최소 높이 전달
+					toolbarOptions: this._toolbarOptions, // 툴바 옵션 전달
 				},
 			});
 
@@ -333,6 +340,34 @@ class KirsiEditorElement extends HTMLElement {
 				return this._minHeight;
 			};
 
+			// 툴바 옵션 설정 메서드 추가
+			this.setToolbarOptions = (options) => {
+				this._toolbarOptions = options || {};
+				
+				// 에디터 인스턴스에 툴바 옵션 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setToolbarOptions === 'function'
+				) {
+					this._editorInstance.setToolbarOptions(this._toolbarOptions);
+				} else {
+					console.warn(
+						'[KirsiEditorElement] setToolbarOptions method not found on Svelte instance.'
+					);
+				}
+				
+				// 속성 업데이트
+				this.setAttribute(
+					'toolbar-options',
+					JSON.stringify(this._toolbarOptions)
+				);
+			};
+			
+			// 툴바 옵션 가져오기 메서드 추가
+			this.getToolbarOptions = () => {
+				return this._toolbarOptions;
+			};
+
 			console.log(
 				'[KirsiEditorElement] Methods exposed (attempted).'
 			);
@@ -484,6 +519,35 @@ class KirsiEditorElement extends HTMLElement {
 				);
 			}
 		}
+		// 툴바 옵션 속성 변경 처리
+		if (name === 'toolbar-options' && oldValue !== newValue) {
+			try {
+				const parsedOptions = JSON.parse(newValue || '{}');
+				this._toolbarOptions = typeof parsedOptions === 'object' ? parsedOptions : {};
+				
+				// 에디터 인스턴스 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setToolbarOptions === 'function'
+				) {
+					this._editorInstance.setToolbarOptions(this._toolbarOptions);
+				}
+			} catch (e) {
+				console.error(
+					'[KirsiEditorElement] Failed to parse toolbar-options attribute:',
+					e
+				);
+				this._toolbarOptions = {}; // 오류 발생 시 기본값으로 초기화
+				
+				// 오류 발생 시 에디터 인스턴스 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setToolbarOptions === 'function'
+				) {
+					this._editorInstance.setToolbarOptions(this._toolbarOptions);
+				}
+			}
+		}
 	}
 
 	// 다크 모드 관련 초기화 메소드
@@ -542,6 +606,32 @@ class KirsiEditorElement extends HTMLElement {
 
 		console.log(
 			`[KirsiEditorElement] 최소 높이 초기화: ${this._minHeight}px`
+		);
+	}
+	
+	// 툴바 옵션 초기화 메서드 추가
+	_initToolbarOptions() {
+		const toolbarOptionsAttr = this.getAttribute('toolbar-options');
+		
+		if (toolbarOptionsAttr) {
+			try {
+				const parsedOptions = JSON.parse(toolbarOptionsAttr);
+				this._toolbarOptions = typeof parsedOptions === 'object' ? parsedOptions : {};
+			} catch (e) {
+				console.error(
+					'[KirsiEditorElement] Failed to parse toolbar-options attribute:',
+					e
+				);
+				this._toolbarOptions = {}; // 오류 발생 시 기본값으로 초기화
+			}
+		} else {
+			// 기본값: 빈 객체 (모든 옵션 표시)
+			this._toolbarOptions = {};
+		}
+		
+		console.log(
+			`[KirsiEditorElement] 툴바 옵션 초기화:`,
+			this._toolbarOptions
 		);
 	}
 
@@ -807,6 +897,15 @@ class KirsiEditorElement extends HTMLElement {
 	getMinHeight = () => {
 		console.warn('getMinHeight called before initialization');
 		return this._minHeight;
+	};
+	
+	// 툴바 옵션 관련 메서드 기본 구현
+	setToolbarOptions = (options) => {
+		console.warn('setToolbarOptions called before initialization');
+	};
+	getToolbarOptions = () => {
+		console.warn('getToolbarOptions called before initialization');
+		return this._toolbarOptions;
 	};
 
 	// 다크 모드 상태만 감지해서 반환 (초기화 전 호출용)

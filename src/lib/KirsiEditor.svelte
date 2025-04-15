@@ -36,6 +36,7 @@
     export let imageUploadEndpoint: string | null = null; // 이미지 업로드 API 엔드포인트
     export let maxHeight: string | number = 600; // 에디터 최대 높이 (기본 600px)
     export let minHeight: string | number = 400; // 에디터 최소 높이 (기본 400px)
+    export let toolbarOptions: Record<string, boolean> = {}; // 툴바 옵션 추가
 
     // State
     let editorElement: HTMLDivElement;
@@ -857,6 +858,17 @@
             (shadowHost.host as any).getMinHeight = () => {
                 return minHeight;
             };
+            
+            // 툴바 옵션 설정 메소드 추가
+            (shadowHost.host as any).setToolbarOptions = (options: Record<string, boolean>) => {
+                toolbarOptions = options || {};
+                console.log('[KirsiEditor] 툴바 옵션 설정:', toolbarOptions);
+            };
+            
+            // 현재 툴바 옵션 확인 메소드 추가
+            (shadowHost.host as any).getToolbarOptions = () => {
+                return toolbarOptions;
+            };
          }
 
         return () => {
@@ -928,6 +940,16 @@
     export function getMinHeight(): string | number {
         return minHeight;
     }
+    
+    // 툴바 옵션 설정 함수 추가
+    export function setToolbarOptions(options: Record<string, boolean>): void {
+        toolbarOptions = options || {};
+    }
+    
+    // 현재 툴바 옵션 반환 함수 추가
+    export function getToolbarOptions(): Record<string, boolean> {
+        return toolbarOptions;
+    }
 
 </script>
 
@@ -948,7 +970,7 @@
         </div>
     {/if}
     {#if editor}
-        <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} />
+        <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} toolbarOptions={toolbarOptions} />
     {/if}
 
     <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} {isDarkMode} />
