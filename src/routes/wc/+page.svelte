@@ -164,7 +164,7 @@
     <div class="editor-container">
         <!-- 웹 컴포넌트 사용 -->
         <!-- svelte-ignore a11y-missing-attribute -->
-        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} toolbar-options={toolbarOptionsStr} image-upload-endpoint="http://138.2.125.193:4000/images/upload"></kirsi-editor>
+        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} toolbar-options={toolbarOptionsStr}></kirsi-editor>
     </div>
 
     <div class="controls">

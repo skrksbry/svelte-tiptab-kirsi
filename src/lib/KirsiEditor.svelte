@@ -346,9 +346,10 @@
                 }
             }
             
-            // 업로드 엔드포인트가 없으면 base64로 처리
+            // 업로드 엔드포인트가 없으면 base64로 처리 (리사이징 후)
             console.log('[KirsiEditor] 업로드 엔드포인트 없음, base64 처리');
-            processImageAsBase64(file, imageId);
+            const resizedFile = await resizeImage(file);
+            processImageAsBase64(resizedFile, imageId);
         } else if (src) {
             const imageInfo: ImageInfo = {
                 id: imageId,
@@ -361,6 +362,72 @@
             const finalImageInfo = addImageToList(imageInfo);
             insertImageIntoEditor(finalImageInfo.id, finalImageInfo.src, finalImageInfo.alt);
         }
+    }
+
+    // 이미지 리사이징 함수
+    async function resizeImage(file: File, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.9): Promise<File> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // 이미지가 최대 크기보다 작으면 리사이징하지 않음
+                    if (width <= maxWidth && height <= maxHeight) {
+                        resolve(file);
+                        return;
+                    }
+
+                    // 비율 유지하면서 리사이징
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round((width * maxHeight) / height);
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('Canvas context not available'));
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) {
+                                reject(new Error('Canvas to Blob conversion failed'));
+                                return;
+                            }
+                            const resizedFile = new File([blob], file.name, {
+                                type: file.type,
+                                lastModified: Date.now(),
+                            });
+                            console.log(`[KirsiEditor] 이미지 리사이징: ${file.size} bytes -> ${resizedFile.size} bytes`);
+                            resolve(resizedFile);
+                        },
+                        file.type,
+                        quality
+                    );
+                };
+                img.onerror = () => reject(new Error('Image loading failed'));
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => reject(new Error('File reading failed'));
+            reader.readAsDataURL(file);
+        });
     }
 
     // Base64로 이미지 처리하는 함수
