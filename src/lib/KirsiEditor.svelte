@@ -18,6 +18,8 @@
     import { CustomCodeBlock } from './extensions/codeBlockConfig';
     import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 
+    const VERSION = '1.0.72';
+
     interface ImageInfo {
         id: string;
         src: string; // data URL or external URL
@@ -37,6 +39,7 @@
     export let maxHeight: string | number = 600; // 에디터 최대 높이 (기본 600px)
     export let minHeight: string | number = 400; // 에디터 최소 높이 (기본 400px)
     export let toolbarOptions: Record<string, boolean> = {}; // 툴바 옵션 추가
+    export let fontFamilies: Array<{ name: string; value: string }> = []; // 폰트 패밀리 목록 추가
 
     // State
     let editorElement: HTMLDivElement;
@@ -936,6 +939,17 @@
             (shadowHost.host as any).getToolbarOptions = () => {
                 return toolbarOptions;
             };
+            
+            // 폰트 패밀리 설정 메소드 추가
+            (shadowHost.host as any).setFontFamilies = (families: Array<{ name: string; value: string }>) => {
+                fontFamilies = families || [];
+                console.log('[KirsiEditor] 폰트 패밀리 설정:', fontFamilies);
+            };
+            
+            // 현재 폰트 패밀리 확인 메소드 추가
+            (shadowHost.host as any).getFontFamilies = () => {
+                return fontFamilies;
+            };
          }
 
         return () => {
@@ -1018,6 +1032,16 @@
         return toolbarOptions;
     }
 
+    // 폰트 패밀리 설정 함수 추가
+    export function setFontFamilies(families: Array<{ name: string; value: string }>): void {
+        fontFamilies = families || [];
+    }
+    
+    // 현재 폰트 패밀리 반환 함수 추가
+    export function getFontFamilies(): Array<{ name: string; value: string }> {
+        return fontFamilies;
+    }
+
 </script>
 
 <div 
@@ -1037,7 +1061,7 @@
         </div>
     {/if}
     {#if editor}
-        <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} toolbarOptions={toolbarOptions} />
+        <Toolbar {editor} on:addImage={handleAddImage} {isDarkMode} toolbarOptions={toolbarOptions} {fontFamilies} />
     {/if}
 
     <ImageList images={$uploadedImages} on:removeImage={handleRemoveImage} on:insertImage={handleInsertImage} {isDarkMode} />
@@ -1063,6 +1087,10 @@
             on:dragstart={handleDragStart}
             on:dragend={handleDragEnd}
         ></div>
+    </div>
+    
+    <div class="editor-version">
+        Kirsi editor v.{VERSION}
     </div>
 </div>
 
@@ -1383,6 +1411,24 @@
     
     :global(.kirsi-dark-theme .code-language-option.selected) {
         background-color: #555;
+    }
+
+    /* 에디터 버전 정보 */
+    .editor-version {
+        position: absolute;
+        bottom: 8px;
+        right: 12px;
+        font-size: 10px;
+        color: #999;
+        opacity: 0.6;
+        user-select: none;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    /* 다크 모드 버전 정보 */
+    .kirsi-dark-theme .editor-version {
+        color: #666;
     }
 
 </style>

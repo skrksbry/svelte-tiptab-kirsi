@@ -24,7 +24,7 @@ export default defineConfig({
 				deadCodeInjectionThreshold: 0.2,
 				debugProtection: false, // 디버거 실행 방지 (개발 중에는 false 권장)
 				debugProtectionInterval: 0,
-				disableConsoleOutput: false, // console.* 함수 비활성화 (배포 시 true 고려)
+				disableConsoleOutput: true, // console.* 함수 비활성화 (배포 시 true 고려)
 				identifierNamesGenerator: 'hexadecimal', // 식별자 이름 생성 방식 ('hexadecimal', 'mangled')
 				log: false,
 				numbersToExpressions: true, // 숫자를 표현식으로 변경
@@ -33,7 +33,7 @@ export default defineConfig({
 				simplify: true,
 				splitStrings: true, // 문자열 리터럴 분할
 				splitStringsChunkLength: 10,
-				stringArray: true, // 문자열을 배열로 추출하고 참조
+				stringArray: true, // 문자열을추가배열로 추출하고 참조
 				stringArrayEncoding: ['rc4'], // 문자열 배열 인코딩 ('none', 'base64', 'rc4')
 				stringArrayIndexShift: true,
 				stringArrayRotate: true,

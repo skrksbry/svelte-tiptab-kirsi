@@ -25,6 +25,7 @@
 	export let editor: Editor;
 	export let isDarkMode: boolean = false; // 다크 모드 상태를 받아오는 prop 추가
 	export let toolbarOptions: ToolbarOptions = {}; // 툴바 옵션 객체 추가
+	export let fontFamilies: Array<{ name: string; value: string }> = []; // 폰트 패밀리 목록
 
 	// 툴바 옵션 인터페이스 정의
 	interface ToolbarOptions {
@@ -82,8 +83,9 @@
 	let linkUrl = '';
 	let linkText = '';
 
-	// 추천 색상 배열 추가
+	// 추천 색상 배열 추가 (첫 번째는 기본색)
 	const recommendedColors = [
+		{ name: '기본색', value: null }, // 색상 지정 없음
 		{ name: '검정', value: '#000000' },
 		{ name: '회색', value: '#777777' },
 		{ name: '빨강', value: '#FF0000' },
@@ -169,13 +171,17 @@
 		showImageForm = false;
 	}
 
-	const fontFamilies = [
+	// 기본 폰트 패밀리 목록 (외부에서 전달되지 않은 경우 사용)
+	const defaultFontFamilies = [
 		{ name: 'Pretendard', value: 'Pretendard' },
 		{ name: '기본', value: 'inherit' },
 		{ name: '고딕', value: 'sans-serif' },
 		{ name: '명조', value: 'serif' },
 		{ name: '모노스페이스', value: 'monospace' },
 	];
+
+	// 실제 사용할 폰트 패밀리 (외부에서 전달된 것 또는 기본값)
+	$: activeFontFamilies = fontFamilies && fontFamilies.length > 0 ? fontFamilies : defaultFontFamilies;
 
 	const fontSizes = [
 		{ name: '기본 크기', value: 'inherit' },
@@ -234,9 +240,15 @@
 		closeAllDropdowns(); // 닫기
 	}
 
-	function setColor(color: string) {
-		editor?.chain().focus().setColor(color).run();
-		selectedColor = color; // 현재 선택된 색상 업데이트
+	function setColor(color: string | null) {
+		if (color === null) {
+			// 기본색 선택 시 색상 제거
+			editor?.chain().focus().unsetColor().run();
+			selectedColor = '#000000'; // 표시용 기본색
+		} else {
+			editor?.chain().focus().setColor(color).run();
+			selectedColor = color; // 현재 선택된 색상 업데이트
+		}
 	}
 
 	function setFontSize(fontSize: string) {
@@ -343,10 +355,6 @@
 		event.preventDefault();
 		event.stopPropagation();
 		
-		// 현재 열려있는 메뉴 확인 및 닫기
-		const existingMenus = document.querySelectorAll('.custom-select-menu');
-		existingMenus.forEach(menu => menu.remove());
-		
 		// 버튼 요소 가져오기
 		const button = event.currentTarget as HTMLElement;
 		
@@ -356,6 +364,10 @@
 			existingMenu.remove();
 			return;
 		}
+		
+		// 다른 타입의 메뉴가 열려있으면 모두 닫기
+		const existingMenus = document.querySelectorAll('.custom-select-menu');
+		existingMenus.forEach(menu => menu.remove());
 		
 		// 메뉴 생성
 		const menu = document.createElement('div');
@@ -385,7 +397,7 @@
 		}
 		
 		// 옵션 목록 생성
-		const options = type === 'fontFamily' ? fontFamilies : fontSizes;
+		const options = type === 'fontFamily' ? activeFontFamilies : fontSizes;
 		
 		options.forEach(option => {
 			const optionEl = document.createElement('div');
@@ -647,7 +659,7 @@
 			>
 				<Type size={18} />
 				<span class="custom-select-value" style="font-family: {selectedFontFamily}">
-					{fontFamilies.find(f => f.value === selectedFontFamily)?.name || '기본'}
+					{activeFontFamilies.find(f => f.value === selectedFontFamily)?.name || '기본'}
 				</span>
 				<ChevronDown size={14} />
 			</button>
@@ -693,10 +705,15 @@
                         {#each recommendedColors as color}
                             <button 
                                 class="color-preset" 
-                                style="background-color: {color.value};" 
+                                class:default-color={color.value === null}
+                                style="background-color: {color.value || 'transparent'};" 
                                 title={color.name}
                                 on:click|stopPropagation={() => setColor(color.value)}
-                            ></button>
+                            >
+                                {#if color.value === null}
+                                    <span class="default-color-icon">×</span>
+                                {/if}
+                            </button>
                         {/each}
                     </div>
                 </div>
@@ -1031,6 +1048,38 @@
     
     .color-preset:hover {
         transform: scale(1.1);
+    }
+
+    /* 기본색 버튼 스타일 */
+    .color-preset.default-color {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .toolbar-light .color-preset.default-color {
+        background: linear-gradient(135deg, transparent 40%, #ccc 40%, #ccc 60%, transparent 60%) !important;
+        border: 1px solid #999;
+    }
+
+    .toolbar-dark .color-preset.default-color {
+        background: linear-gradient(135deg, transparent 40%, #666 40%, #666 60%, transparent 60%) !important;
+        border: 1px solid #777;
+    }
+
+    .default-color-icon {
+        font-size: 18px;
+        font-weight: bold;
+        line-height: 1;
+    }
+
+    .toolbar-light .default-color-icon {
+        color: #333;
+    }
+
+    .toolbar-dark .default-color-icon {
+        color: #e0e0e0;
     }
 
     /* 작은 화면에서 색상 선택 드롭다운 반응형 처리 */

@@ -19,14 +19,20 @@
     let currentContent = '<p>Web Component Loaded!</p>';
     let currentImages: any[] = [];
     let isDarkMode = true; // 초기값을 다크모드로 설정
+
     
     // 이미지, 제목, 굵게만 활성화하고 나머지 메뉴는 비활성화하는 툴바 옵션
     const customToolbarOptions = {
         basicFormatting: true, // 기본 서식(굵게 등) 비활성화 후 개별 설정
         headings: true, // 제목 활성화
         lists: false, // 목록 비활성화
-        fontOptions: false, // 폰트 관련 옵션 비활성화
-        fontFamily: false, // 글꼴 비활성화
+        fontOptions: true, // 폰트 관련 옵션 비활성화
+        fontFamilies: [
+  { name: 'Noto Sans KR', value: 'Noto Sans KR' },
+  { name: 'Roboto', value: 'Roboto' },
+  { name: '나눔고딕', value: 'NanumGothic' }
+],
+        fontFamily: true, // 글꼴 비활성화
         fontSize: false, // 글자 크기 비활성화
         fontColor: false, // 글자 색 비활성화
         inlineObjects: true, // 인라인 객체(링크, 이미지 등) 비활성화 후 개별 설정
@@ -37,6 +43,8 @@
     
     // JSON 문자열로 변환하여 웹 컴포넌트에 전달
     const toolbarOptionsStr = JSON.stringify(customToolbarOptions);
+
+    const fontFamiliesStr = JSON.stringify(customToolbarOptions.fontFamilies);
     
     // 페이지 로드 시 다크모드 적용
     function applyDarkMode(dark: boolean) {
@@ -164,7 +172,7 @@
     <div class="editor-container">
         <!-- 웹 컴포넌트 사용 -->
         <!-- svelte-ignore a11y-missing-attribute -->
-        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} toolbar-options={toolbarOptionsStr}></kirsi-editor>
+        <kirsi-editor bind:this={editorRef} dark-mode={isDarkMode} toolbar-options={toolbarOptionsStr} font-families={fontFamiliesStr}></kirsi-editor>
     </div>
 
     <div class="controls">

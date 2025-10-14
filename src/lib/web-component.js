@@ -24,6 +24,7 @@ class KirsiEditorElement extends HTMLElement {
 	_maxHeight = 600; // 에디터 최대 높이 (기본 600px)
 	_minHeight = 400; // 최소 높이 추가
 	_toolbarOptions = {}; // 툴바 옵션 객체 추가
+	_fontFamilies = []; // 폰트 패밀리 목록 추가
 
 	static get observedAttributes() {
 		return [
@@ -34,6 +35,7 @@ class KirsiEditorElement extends HTMLElement {
 			'max-height',
 			'min-height', // 최소 높이 속성 추가
 			'toolbar-options', // 툴바 옵션 속성 추가
+			'font-families', // 폰트 패밀리 목록 속성 추가
 		];
 	}
 
@@ -98,6 +100,9 @@ class KirsiEditorElement extends HTMLElement {
 		// --- 툴바 옵션 초기 설정 ---
 		this._initToolbarOptions();
 
+		// --- 폰트 패밀리 초기 설정 ---
+		this._initFontFamilies();
+
 		try {
 			// Svelte 5: mount 함수 사용
 			const mountedComponent = mount(KirsiEditor, {
@@ -112,6 +117,7 @@ class KirsiEditorElement extends HTMLElement {
 					maxHeight: this._maxHeight, // 최대 높이 전달
 					minHeight: this._minHeight, // 최소 높이 전달
 					toolbarOptions: this._toolbarOptions, // 툴바 옵션 전달
+					fontFamilies: this._fontFamilies, // 폰트 패밀리 전달
 				},
 			});
 
@@ -368,6 +374,34 @@ class KirsiEditorElement extends HTMLElement {
 				return this._toolbarOptions;
 			};
 
+			// 폰트 패밀리 설정 메서드 추가
+			this.setFontFamilies = (families) => {
+				this._fontFamilies = families || [];
+				
+				// 에디터 인스턴스에 폰트 패밀리 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setFontFamilies === 'function'
+				) {
+					this._editorInstance.setFontFamilies(this._fontFamilies);
+				} else {
+					console.warn(
+						'[KirsiEditorElement] setFontFamilies method not found on Svelte instance.'
+					);
+				}
+				
+				// 속성 업데이트
+				this.setAttribute(
+					'font-families',
+					JSON.stringify(this._fontFamilies)
+				);
+			};
+			
+			// 폰트 패밀리 가져오기 메서드 추가
+			this.getFontFamilies = () => {
+				return this._fontFamilies;
+			};
+
 			console.log(
 				'[KirsiEditorElement] Methods exposed (attempted).'
 			);
@@ -548,6 +582,35 @@ class KirsiEditorElement extends HTMLElement {
 				}
 			}
 		}
+		// 폰트 패밀리 속성 변경 처리
+		if (name === 'font-families' && oldValue !== newValue) {
+			try {
+				const parsedFamilies = JSON.parse(newValue || '[]');
+				this._fontFamilies = Array.isArray(parsedFamilies) ? parsedFamilies : [];
+				
+				// 에디터 인스턴스 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setFontFamilies === 'function'
+				) {
+					this._editorInstance.setFontFamilies(this._fontFamilies);
+				}
+			} catch (e) {
+				console.error(
+					'[KirsiEditorElement] Failed to parse font-families attribute:',
+					e
+				);
+				this._fontFamilies = []; // 오류 발생 시 기본값으로 초기화
+				
+				// 오류 발생 시 에디터 인스턴스 업데이트
+				if (
+					this._editorInstance &&
+					typeof this._editorInstance.setFontFamilies === 'function'
+				) {
+					this._editorInstance.setFontFamilies(this._fontFamilies);
+				}
+			}
+		}
 	}
 
 	// 다크 모드 관련 초기화 메소드
@@ -632,6 +695,32 @@ class KirsiEditorElement extends HTMLElement {
 		console.log(
 			`[KirsiEditorElement] 툴바 옵션 초기화:`,
 			this._toolbarOptions
+		);
+	}
+
+	// 폰트 패밀리 초기화 메서드 추가
+	_initFontFamilies() {
+		const fontFamiliesAttr = this.getAttribute('font-families');
+		
+		if (fontFamiliesAttr) {
+			try {
+				const parsedFamilies = JSON.parse(fontFamiliesAttr);
+				this._fontFamilies = Array.isArray(parsedFamilies) ? parsedFamilies : [];
+			} catch (e) {
+				console.error(
+					'[KirsiEditorElement] Failed to parse font-families attribute:',
+					e
+				);
+				this._fontFamilies = []; // 오류 발생 시 기본값으로 초기화
+			}
+		} else {
+			// 기본값: 빈 배열 (기본 폰트 목록 사용)
+			this._fontFamilies = [];
+		}
+		
+		console.log(
+			`[KirsiEditorElement] 폰트 패밀리 초기화:`,
+			this._fontFamilies
 		);
 	}
 
@@ -906,6 +995,15 @@ class KirsiEditorElement extends HTMLElement {
 	getToolbarOptions = () => {
 		console.warn('getToolbarOptions called before initialization');
 		return this._toolbarOptions;
+	};
+
+	// 폰트 패밀리 관련 메서드 기본 구현
+	setFontFamilies = (families) => {
+		console.warn('setFontFamilies called before initialization');
+	};
+	getFontFamilies = () => {
+		console.warn('getFontFamilies called before initialization');
+		return this._fontFamilies;
 	};
 
 	// 다크 모드 상태만 감지해서 반환 (초기화 전 호출용)
