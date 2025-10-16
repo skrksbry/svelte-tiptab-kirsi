@@ -1102,16 +1102,16 @@
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: auto; /* 컨텐츠에 맞게 자동 조절되도록 변경 */
+        height: auto; 
     }
 
-    /* 라이트 모드 스타일 (기본) */
+    
     .kirsi-light-theme {
         background-color: #ffffff;
         color: #333333;
     }
 
-    /* 다크 모드 스타일 */
+    
     .kirsi-dark-theme {
         background-color: #1e1e1e;
         color: #e0e0e0;
@@ -1123,32 +1123,32 @@
     }
 
     .kirsi-dark-theme :global(.ProseMirror a) {
-        color: #60a5fa; /* 다크 모드에서 링크 색상 */
+        color: #60a5fa; 
     }
 
     .editor-container {
-        position: relative; /* 오버레이의 기준점 */
+        position: relative; 
         flex-grow: 1;
-        overflow-y: auto; /* 최대 높이를 초과할 경우에만 스크롤 활성화 */
+        overflow-y: auto; 
     }
 
-    /* 다크 모드에서 에디터 컨테이너 */
+    
     .kirsi-dark-theme .editor-container {
         background-color: #1e1e1e;
     }
 
     .editor-container.drag-active {
-        /* background-color: rgba(0, 120, 255, 0.05); */
+        
     }
 
     .editor-content {
         padding: 1rem;
         outline: none;
-        height: auto; /* 컨텐츠에 따라 자동으로 높이 조절 */
+        height: auto; 
         cursor: text;
     }
 
-     /* 기본 ProseMirror 스타일 */
+     
     :global(.ProseMirror) {
         outline: none;
     }
@@ -1168,7 +1168,7 @@
         margin: 0.5em 0;
     }
     :global(.ProseMirror li > p) {
-        margin: 0; /* 리스트 항목 내 단락 마진 제거 */
+        margin: 0; 
     }
 
     :global(.ProseMirror a) {
@@ -1177,7 +1177,7 @@
         cursor: pointer;
     }
 
-    /* 드래그 앤 드롭 오버레이 */
+    
     .drop-overlay {
         position: absolute;
         top: 0;
@@ -1186,26 +1186,26 @@
         bottom: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 120, 255, 0.15); /* 더 진한 배경색 */
+        background-color: rgba(0, 120, 255, 0.15); 
         display: flex;
         align-items: center;
         justify-content: center;
-        pointer-events: auto; /* 이벤트를 캡처하도록 변경 */
-        z-index: 10000; /* z-index 대폭 증가 */
-        border: 3px dashed #007bff; /* 더 굵은 테두리 */
+        pointer-events: auto; 
+        z-index: 10000; 
+        border: 3px dashed #007bff; 
         border-radius: 4px;
         box-sizing: border-box;
-        animation: pulse 1.5s infinite alternate; /* 애니메이션 추가 */
+        animation: pulse 1.5s infinite alternate; 
     }
 
-    /* 다크 모드 드롭 오버레이 조정 */
+    
     .kirsi-dark-theme .drop-overlay {
         background-color: rgba(0, 120, 255, 0.2);
         border-color: #60a5fa;
         animation: pulse-dark 1.5s infinite alternate;
     }
 
-    /* 펄스 애니메이션 추가 */
+    
     @keyframes pulse {
         from {
             background-color: rgba(0, 120, 255, 0.1);
@@ -1215,7 +1215,7 @@
         }
     }
 
-    /* 다크 모드 펄스 애니메이션 */
+    
     @keyframes pulse-dark {
         from {
             background-color: rgba(0, 120, 255, 0.15);
@@ -1225,7 +1225,7 @@
         }
     }
 
-    /* 드롭 메시지 스타일 개선 */
+    
     .drop-message {
         background-color: white;
         padding: 1rem 2rem;
@@ -1234,21 +1234,21 @@
         font-size: 1.2rem;
         font-weight: bold;
         color: #007bff;
-        transform: translateY(-20px); /* 약간 위로 이동 */
+        transform: translateY(-20px); 
     }
 
-    /* 다크 모드 드롭 메시지 */
+    
     .kirsi-dark-theme .drop-message {
         background-color: #2d2d2d;
         color: #60a5fa;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
-    /* 이미지 리사이징 스타일 */
+    
     :global(.image-wrapper) {
         position: relative;
-        display: inline-block; /* 이미지가 줄바꿈되지 않도록 */
-        line-height: 0; /* 추가 여백 제거 */
+        display: inline-block; 
+        line-height: 0; 
         max-width: 100%;
         vertical-align: middle;
     }
@@ -1257,7 +1257,7 @@
         max-width: 100%;
         height: auto;
         cursor: pointer;
-        border: 1px solid transparent; /* 기본 테두리 투명 */
+        border: 1px solid transparent; 
     }
     :global(.image-wrapper img.resizing) {
         cursor: nwse-resize;
@@ -1268,7 +1268,7 @@
          border: 1px solid #007bff;
     }
 
-    /* 다크 모드 이미지 테두리 조정 */
+    
     :global(.kirsi-dark-theme .image-wrapper img.resizing) {
         border-color: #60a5fa;
     }
@@ -1291,7 +1291,7 @@
         z-index: 5;
     }
 
-    /* 다크 모드 리사이즈 핸들 스타일 */
+    
     :global(.kirsi-dark-theme .resize-handle) {
         background-color: #60a5fa;
         border-color: #2d2d2d;
@@ -1301,7 +1301,7 @@
         opacity: 1;
     }
 
-    /* Tiptap CodeBlockLowlight 기본 스타일 + 테마 호환성 */
+    
     :global(.ProseMirror pre) {
         font-family: 'JetBrainsMono', monospace;
         padding: 0.75rem 1rem;
@@ -1309,13 +1309,13 @@
         margin: 1em 0;
         white-space: pre;
         overflow-x: auto;
-        background-color: #f6f8fa; /* 라이트 모드 기본 코드 배경 */
-        position: relative; /* 언어 선택기 위치 잡기 위해 추가 */
+        background-color: #f6f8fa; 
+        position: relative; 
     }
 
-    /* 다크 모드 코드 블록 스타일 */
+    
     :global(.kirsi-dark-theme .ProseMirror pre) {
-        background-color: #2d2d2d; /* 다크 모드 코드 배경 */
+        background-color: #2d2d2d; 
     }
 
     :global(.ProseMirror pre code) { 
@@ -1326,7 +1326,7 @@
         background: none; 
     }
     
-    /* 코드 블록 언어 선택기 스타일 */
+    
     :global(.code-language-select-button) {
         position: absolute;
         top: 4px;
@@ -1413,7 +1413,7 @@
         background-color: #555;
     }
 
-    /* 에디터 버전 정보 */
+    
     .editor-version {
         position: absolute;
         bottom: 8px;
@@ -1426,7 +1426,7 @@
         z-index: 1;
     }
 
-    /* 다크 모드 버전 정보 */
+    
     .kirsi-dark-theme .editor-version {
         color: #666;
     }

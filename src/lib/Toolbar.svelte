@@ -746,42 +746,23 @@
 		{#if mergedOptions.images}
 		<label class="file-input-button" title="이미지 첨부">
 			<Image size={18} />
-			<input type="file" accept="image/*" on:change={addImageFromFile} />
-		</label>
-		{/if}
-
-		<!-- 코드 블록 -->
-		{#if mergedOptions.codeBlock}
-		<button class:active={isCodeBlockActive} on:click={toggleCodeBlock} title="코드 블록">
-			<Code size={18} />
-		</button>
-		{/if}
-	</div>
-	{/if}
-</div>
-
-<style>
-	.toolbar {
-		display: flex;
-		padding: 8px;
-		border-bottom: 1px solid;
-		flex-wrap: wrap; /* 이미 flex-wrap: wrap이 있어서 줄바꿈은 가능 */
+			<input type="file" accept="image
 		gap: 4px;
 		width: 100%;
         align-items: center; 
-        overflow: visible; /* 드롭다운 메뉴가 보이도록 유지 */
-        box-sizing: border-box; /* 패딩을 너비에 포함 */
-        min-height: 46px; /* 최소 높이 설정 */
+        overflow: visible; 
+        box-sizing: border-box; 
+        min-height: 46px; 
 	}
 
-    /* 라이트 모드 스타일 */
+    
     .toolbar-light {
         background-color: #f5f5f5;
         border-color: #ccc;
         color: #333;
     }
 
-    /* 다크 모드 스타일 */
+    
     .toolbar-dark {
         background-color: #2d2d2d;
         border-color: #444;
@@ -791,19 +772,19 @@
 	.toolbar-group {
 		display: flex;
 		gap: 2px;
-        align-items: center; /* 버튼 높이 정렬 */
+        align-items: center; 
 		margin-right: 8px;
 		padding-right: 8px;
-        height: 30px; /* 그룹 높이 고정 */
-        /* 툴바 그룹이 작을 때 줄바꿈 되도록 설정 */
+        height: 30px; 
+        
         flex-wrap: nowrap; 
         min-width: fit-content;
 	}
 
-    /* 그룹이 줄바꿈될 때 오른쪽 테두리 처리 */
+    
     @media (max-width: 768px) {
         .toolbar-group {
-            margin-bottom: 4px; /* 그룹 간 세로 여백 추가 */
+            margin-bottom: 4px; 
         }
     }
 
@@ -828,13 +809,13 @@
 		background: none;
 		border: 1px solid transparent;
 		border-radius: 4px;
-		padding: 4px 6px; /* 패딩 조정 */
+		padding: 4px 6px; 
 		cursor: pointer;
-        height: 28px; /* 버튼 높이 고정 */
-        min-width: 28px; /* 최소 너비 */
+        height: 28px; 
+        min-width: 28px; 
 	}
 
-    /* 라이트 모드 버튼 스타일 */
+    
     .toolbar-light button {
         color: #333;
     }
@@ -848,7 +829,7 @@
         border-color: #aaa;
     }
 
-    /* 다크 모드 버튼 스타일 */
+    
     .toolbar-dark button {
         color: #e0e0e0;
     }
@@ -869,28 +850,28 @@
 
 	.dropdown-content {
 		position: absolute;
-		top: calc(100% + 4px); /* 툴바 아래에 위치 */
+		top: calc(100% + 4px); 
 		left: 0;
-		z-index: 1000; /* 다른 요소 위에 표시 */
+		z-index: 1000; 
 		min-width: 160px;
 		border-radius: 4px;
 		padding: 8px;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-        overflow: visible; /* 모달이 잘리지 않도록 수정 */
-        max-height: none; /* 높이 제한 해제 */
-        max-width: none; /* 너비 제한 해제 */
+        overflow: visible; 
+        max-height: none; 
+        max-width: none; 
 	}
 
-    /* 화면 오른쪽 끝에 있는 드롭다운 메뉴가 화면을 벗어나지 않도록 */
+    
     @media (max-width: 768px) {
         .dropdown-content {
-            right: 0; /* 오른쪽 정렬도 적용 */
-            left: auto; /* 왼쪽 정렬 제거 */
+            right: 0; 
+            left: auto; 
         }
         
-        /* 중앙에 있는 드롭다운은 왼쪽 정렬 유지 */
+        
         .link-form-container .dropdown-content,
         .font-family-container .dropdown-content,
         .font-size-container .dropdown-content {
@@ -899,7 +880,7 @@
         }
     }
 
-    /* 드롭다운 라이트/다크 모드 스타일 */
+    
     .toolbar-light .dropdown-content {
         background-color: white;
         box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
@@ -914,20 +895,20 @@
 
     .dropdown button {
         width: 100%;
-        justify-content: flex-start; /* 버튼 내용 왼쪽 정렬 */
-        height: auto; /* 내부 컨텐츠 높이에 맞춤 */
+        justify-content: flex-start; 
+        height: auto; 
         min-width: auto;
     }
 
     .dropdown > button {
-        height: 28px; /* 드롭다운 토글 버튼 높이 고정 */
+        height: 28px; 
         min-width: 28px;
         display: flex;
         align-items: center;
         gap: 4px;
     }
 
-	/* 커스텀 셀렉트 스타일 */
+	
     .custom-select {
         position: relative;
         display: inline-block;
@@ -965,7 +946,7 @@
         text-align: left;
     }
     
-    /* 작은 화면에서 select 요소 너비 줄임 */
+    
     @media (max-width: 480px) {
         .custom-select-value {
             min-width: 40px;
@@ -978,15 +959,15 @@
         }
     }
 
-	/* 폰트 선택 wrapper 스타일 추가 */
+	
     .font-family-container, .font-size-container {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-        flex-shrink: 0; /* 폰트 선택 영역이 줄어들지 않도록 */
+        flex-shrink: 0; 
 	}
 
-	/* 색상 선택 드롭다운 */
+	
     .color-indicator {
         display: inline-block;
         width: 14px;
@@ -1050,7 +1031,7 @@
         transform: scale(1.1);
     }
 
-    /* 기본색 버튼 스타일 */
+    
     .color-preset.default-color {
         position: relative;
         display: flex;
@@ -1082,7 +1063,7 @@
         color: #e0e0e0;
     }
 
-    /* 작은 화면에서 색상 선택 드롭다운 반응형 처리 */
+    
     @media (max-width: 480px) {
         .color-picker-content {
             min-width: 150px;
@@ -1093,12 +1074,12 @@
         }
     }
 
-	/* 링크/이미지 폼 드롭다운 */
+	
 	.link-form-content,
 	.image-form-content {
 		min-width: 250px;
-        width: auto; /* 내용에 맞게 자동 너비 설정 */
-        box-sizing: border-box; /* 패딩을 너비에 포함 */
+        width: auto; 
+        box-sizing: border-box; 
 	}
 	.link-form-content input,
 	.image-form-content input[type="text"] {
@@ -1110,7 +1091,7 @@
         margin-bottom: 4px;
 	}
 
-    /* 라이트/다크 모드 input 스타일 */
+    
     .toolbar-light .link-form-content input,
     .toolbar-light .image-form-content input[type="text"] {
         border: 1px solid #ccc;
@@ -1133,7 +1114,7 @@
         height: auto;
 	}
 
-    /* 라이트/다크 모드 버튼 스타일 */
+    
     .toolbar-light .link-form-content button,
     .toolbar-light .image-form-content button {
         background-color: #eee;
@@ -1172,13 +1153,13 @@
     }
 
     .image-form-content {
-        padding: 12px; /* 패딩 증가 */
-        height: auto; /* 내용에 맞게 높이 조정 */
+        padding: 12px; 
+        height: auto; 
     }
 
     .file-upload-label {
-        display: block; /* 레이블을 블록 요소로 만들어 더 나은 간격 제공 */
-        margin-bottom: 6px; /* 레이블 아래 여백 추가 */
+        display: block; 
+        margin-bottom: 6px; 
     }
 
     .image-form-content .file-upload-label {
@@ -1196,11 +1177,11 @@
 
     .image-form-content input[type="file"] {
         font-size: 12px;
-        width: 100%; /* 파일 입력의 너비 100%로 설정 */
+        width: 100%; 
         box-sizing: border-box;
-        padding: 4px 0; /* 상하 패딩 추가 */
-        height: auto; /* 높이 자동 조정 */
-        min-height: 24px; /* 최소 높이 설정 */
+        padding: 4px 0; 
+        height: auto; 
+        min-height: 24px; 
     }
 
     .toolbar-light .image-form-content input[type="file"] {
@@ -1211,7 +1192,7 @@
         color: #e0e0e0;
     }
 
-    /* 드롭다운 컨테이너에 position: relative 추가 */
+    
     .color-picker-container,
     .link-form-container,
     .image-form-container {
@@ -1219,7 +1200,7 @@
         display: inline-block; 
     }
 
-    /* 작은 화면에서 폰트, 링크, 이미지 드롭다운 반응형 처리 */
+    
     @media (max-width: 480px) {
         .link-form-content,
         .image-form-content {
@@ -1229,7 +1210,7 @@
         }
     }
 
-    /* 파일 입력 버튼 스타일 */
+    
     .file-input-button {
         display: flex;
         align-items: center;

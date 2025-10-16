@@ -315,14 +315,14 @@
 		overflow: hidden;
 	}
 
-	/* 라이트 모드 스타일 */
+	
 	.light-mode {
 		background-color: #f8f9fa;
 		border: 1px solid #e0e0e0;
 		color: #333;
 	}
 
-	/* 다크 모드 스타일 */
+	
 	.dark-mode {
 		background-color: #2d2d2d;
 		border: 1px solid #444;
@@ -340,7 +340,7 @@
 		font-size: 14px;
 	}
 
-	/* 라이트/다크 모드 헤더 스타일 */
+	
 	.light-mode .image-list-header {
 		background-color: #eaeaea;
 	}
@@ -368,7 +368,7 @@
 		padding: 12px;
 		max-height: 200px;
 		overflow-y: auto;
-		position: relative; /* 드래그 요소 포지셔닝 */
+		position: relative; 
 	}
 
 	.image-item {
@@ -377,12 +377,12 @@
 		display: flex;
 		flex-direction: column;
 		position: relative;
-		touch-action: none; /* 모바일에서 드래그 시 터치 이벤트 제어 */
+		touch-action: none; 
 		transition: transform 0.1s ease, box-shadow 0.2s ease;
 		cursor: grab;
 	}
 
-	/* 라이트/다크 모드 이미지 아이템 스타일 */
+	
 	.light-mode .image-item {
 		background-color: white;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -395,7 +395,7 @@
 		border: 1px solid #555;
 	}
 
-	/* 드래그 중인 아이템 스타일 */
+	
 	.image-item.dragging {
 		opacity: 0.5;
 		transform: scale(0.95);
@@ -416,7 +416,7 @@
 		box-shadow: 0 0 0 2px #60a5fa;
 	}
 
-	/* 고스트 요소 (자리 표시자) */
+	
 	.image-item.ghost {
 		opacity: 0.4;
 		pointer-events: none;
@@ -435,7 +435,7 @@
 		height: 100%;
 		object-fit: cover;
 		transition: transform 0.3s ease;
-		pointer-events: none; /* 이미지 요소로 이벤트가 이동하지 않도록 */
+		pointer-events: none; 
 	}
 
 	.image-item:hover .image-preview img {
@@ -444,13 +444,13 @@
 
 	.image-item.dragging .image-preview img,
 	.image-item.touch-dragging .image-preview img {
-		transform: none; /* 드래그 중일 때는 이미지 확대 효과 제거 */
+		transform: none; 
 	}
 
 	.image-info {
 		padding: 6px 8px;
 		flex-grow: 1;
-		pointer-events: none; /* 드래그를 방해하지 않도록 */
+		pointer-events: none; 
 	}
 
 	.image-name {
@@ -467,7 +467,7 @@
 		color: #888;
 	}
 
-	/* 다크 모드 텍스트 색상 */
+	
 	.dark-mode .image-meta {
 		color: #aaa;
 	}
@@ -480,7 +480,7 @@
 		transition: opacity 0.2s ease;
 		background-color: rgba(0, 0, 0, 0.5);
 		border-radius: 4px;
-		z-index: 5; /* 드래그 중에도 표시되도록 */
+		z-index: 5; 
 	}
 
 	.image-item:hover .image-actions {
@@ -489,7 +489,7 @@
 
 	.image-item.dragging .image-actions,
 	.image-item.touch-dragging .image-actions {
-		display: none; /* 드래그 중에는 액션 버튼 숨김 */
+		display: none; 
 	}
 
 	.remove-button {
@@ -502,14 +502,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 6; /* 이벤트 캡처를 위해 높은 z-index */
+		z-index: 6; 
 	}
 
 	.remove-button:hover {
 		background-color: rgba(255, 0, 0, 0.3);
 	}
 
-	/* 스크롤바 스타일링 */
+	
 	.dark-mode .image-list::-webkit-scrollbar {
 		width: 6px;
 	}
@@ -536,10 +536,10 @@
 		border-radius: 3px;
 	}
 	
-	/* 모바일 환경을 위한 추가 스타일 */
+	
 	@media (hover: none) and (pointer: coarse) {
 		.image-actions {
-			opacity: 1; /* 모바일에서는 항상 삭제 버튼 표시 */
+			opacity: 1; 
 			background-color: rgba(0, 0, 0, 0.7);
 		}
 		
@@ -547,7 +547,7 @@
 			touch-action: none;
 		}
 		
-		/* 터치 핸들 아이콘 추가 */
+		
 		.image-info::before {
 			content: "︙";
 			position: absolute;
