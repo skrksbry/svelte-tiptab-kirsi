@@ -746,7 +746,26 @@
 		{#if mergedOptions.images}
 		<label class="file-input-button" title="이미지 첨부">
 			<Image size={18} />
-			<input type="file" accept="image
+			<input type="file" accept="image/*" on:change={addImageFromFile} />
+		</label>
+		{/if}
+
+		<!-- 코드 블록 -->
+		{#if mergedOptions.codeBlock}
+		<button class:active={isCodeBlockActive} on:click={toggleCodeBlock} title="코드 블록">
+			<Code size={18} />
+		</button>
+		{/if}
+	</div>
+	{/if}
+</div>
+
+<style>
+	.toolbar {
+		display: flex;
+		padding: 8px;
+		border-bottom: 1px solid;
+		flex-wrap: wrap; 
 		gap: 4px;
 		width: 100%;
         align-items: center; 
