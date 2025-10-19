@@ -11,6 +11,7 @@ const ALLOWED_HOSTNAMES = [
 	'138.2.125.193',
 	'blog.silvercherry.io',
 	'curly-potato-55jrj56gj5h7x7v-5174.app.github.dev',
+	'or-nn2.pages.dev',
 ];
 
 class KirsiEditorElement extends HTMLElement {
