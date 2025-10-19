@@ -308,4 +308,16 @@
         background-color: #1e1e1e;
         border-color: #444;
     }
+
+    /* 미리보기에서 빈 paragraph가 높이를 가지도록 설정 */
+    .content-preview :global(p) {
+        margin: 0.5em 0;
+        min-height: 1.5em;
+    }
+
+    .content-preview :global(p:empty::before) {
+        content: '';
+        display: inline-block;
+        width: 0;
+    }
 </style>

@@ -19,6 +19,9 @@
 		Type,
 		FileCode,
 		ChevronDown,
+		AlignLeft,
+		AlignCenter,
+		AlignRight,
 	} from 'lucide-svelte';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -32,6 +35,7 @@
 		basicFormatting?: boolean;
 		headings?: boolean;
 		lists?: boolean;
+		textAlign?: boolean;
 		fontOptions?: boolean;
 		fontFamily?: boolean;
 		fontSize?: boolean;
@@ -41,12 +45,13 @@
 		images?: boolean;
 		codeBlock?: boolean;
 	}
-	
+
 	// 툴바 옵션 기본값 설정 (모두 활성화)
 	const defaultOptions: ToolbarOptions = {
 		basicFormatting: true, // 굵게, 기울임, 밑줄, 취소선
 		headings: true, // 제목 1, 2, 3
 		lists: true, // 글머리 기호, 번호 매기기
+		textAlign: true, // 좌, 우, 중앙 정렬
 		fontOptions: true, // 폰트 관련 모든 옵션
 		fontFamily: true, // 글꼴
 		fontSize: true, // 글자 크기
@@ -225,6 +230,10 @@
 
 	function toggleOrderedList() {
 		editor?.chain().focus().toggleOrderedList().run();
+	}
+
+	function setTextAlign(alignment: 'left' | 'center' | 'right') {
+		editor?.chain().focus().setTextAlign(alignment).run();
 	}
 
 	function toggleCodeBlock() {
@@ -642,6 +651,21 @@
 		</button>
 		<button class:active={isActive('orderedList')} on:click={toggleOrderedList} title="번호 매기기">
 			<ListOrdered size={18} />
+		</button>
+	</div>
+	{/if}
+
+	<!-- 정렬 그룹 - 옵션에 따라 표시 여부 결정 -->
+	{#if mergedOptions.textAlign}
+	<div class="toolbar-group">
+		<button class:active={isActive({ textAlign: 'left' })} on:click={() => setTextAlign('left')} title="왼쪽 정렬">
+			<AlignLeft size={18} />
+		</button>
+		<button class:active={isActive({ textAlign: 'center' })} on:click={() => setTextAlign('center')} title="가운데 정렬">
+			<AlignCenter size={18} />
+		</button>
+		<button class:active={isActive({ textAlign: 'right' })} on:click={() => setTextAlign('right')} title="오른쪽 정렬">
+			<AlignRight size={18} />
 		</button>
 	</div>
 	{/if}

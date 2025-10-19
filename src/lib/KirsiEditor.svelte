@@ -16,9 +16,8 @@
     import ImageList from './ImageList.svelte';
     import FontSize from './extensions/FontSize';
     import { CustomCodeBlock } from './extensions/codeBlockConfig';
-    import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 
-    const VERSION = '1.0.72';
+    const VERSION = '1.0.74';
 
     interface ImageInfo {
         id: string;
@@ -825,6 +824,12 @@
                 StarterKit.configure({
                     codeBlock: false,
                     heading: { levels: [1, 2, 3] },
+                    paragraph: {
+                        HTMLAttributes: {
+                            class: 'paragraph',
+                        },
+                    },
+                    gapcursor: false, // gapcursor 비활성화로 빈 줄 유지
                 }),
                 CustomImage.configure({
                     inline: true,
@@ -846,8 +851,17 @@
                 CustomCodeBlock,
             ],
             content: content,
+            editorProps: {
+                attributes: {
+                    spellcheck: 'false',
+                },
+            },
             onUpdate: ({ editor: currentEditor }) => {
-                 content = currentEditor.getHTML();
+                 // 빈 <p></p> 태그를 <p><br></p>로 변환
+                 let html = currentEditor.getHTML();
+                 html = html.replace(/<p><\/p>/g, '<p><br></p>');
+                 html = html.replace(/<p([^>]*)><\/p>/g, '<p$1><br></p>');
+                 content = html;
                  hostElement?.dispatchEvent(new CustomEvent('change', {
                      detail: { content: content },
                      bubbles: true,
@@ -973,7 +987,11 @@
     });
 
     export function getContent(): string {
-        return editor?.getHTML() || '';
+        let html = editor?.getHTML() || '';
+        // 빈 <p></p> 태그를 <p><br></p>로 변환
+        html = html.replace(/<p><\/p>/g, '<p><br></p>');
+        html = html.replace(/<p([^>]*)><\/p>/g, '<p$1><br></p>');
+        return html;
     }
     export function setContent(newContent: string): void {
         editor?.commands.setContent(newContent, false);
@@ -1072,15 +1090,29 @@
         style="max-height: {maxHeight}px;"
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div 
-            bind:this={editorElement} 
+        <div
+            bind:this={editorElement}
             class="editor-content"
             style="min-height: {minHeight}px;"
             on:click={(e) => {
-                if (!editor?.isFocused) {
-                    editor?.chain()
-                        .focus('end') // 마지막 위치에 커서를 위치시킴
-                        .run();
+                const target = e.target as HTMLElement;
+
+                // editor-content를 직접 클릭한 경우에만 처리
+                if (target.classList.contains('editor-content')) {
+                    const rect = target.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const contentPadding = 16; // 1rem = 16px
+
+                    // 좌우 패딩 영역 클릭 시 무시 (좌측 또는 우측 패딩 영역)
+                    if (clickX < contentPadding || clickX > rect.width - contentPadding) {
+                        return;
+                    }
+
+                    // 아래 여백 클릭 시에만 포커스 (ProseMirror가 없는 영역)
+                    const prosemirror = target.querySelector('.ProseMirror');
+                    if (prosemirror && !prosemirror.contains(e.target as Node)) {
+                        editor?.chain().focus('end').run();
+                    }
                 }
             }}
             on:mousedown={handleMouseDown}
@@ -1148,12 +1180,18 @@
         cursor: text;
     }
 
-     
+
     :global(.ProseMirror) {
         outline: none;
     }
     :global(.ProseMirror p) {
         margin: 0.5em 0;
+        min-height: 1.5em;
+    }
+    :global(.ProseMirror p:empty::before) {
+        content: '';
+        display: inline-block;
+        width: 0;
     }
     :global(.ProseMirror h1, .ProseMirror h2, .ProseMirror h3) {
         margin: 1em 0 0.5em;
