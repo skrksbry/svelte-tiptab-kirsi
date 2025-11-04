@@ -1,15 +1,16 @@
 <script lang="ts">
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     import { Editor, type EditorEvents } from '@tiptap/core';
-    import StarterKit from '@tiptap/starter-kit';
-    import ImageExtension from '@tiptap/extension-image';
-    import Link from '@tiptap/extension-link';
-    import Heading from '@tiptap/extension-heading';
-    import TextStyle from '@tiptap/extension-text-style';
-    import FontFamily from '@tiptap/extension-font-family';
-    import Color from '@tiptap/extension-color';
-    import Underline from '@tiptap/extension-underline';
-    import TextAlign from '@tiptap/extension-text-align';
+    import { StarterKit } from '@tiptap/starter-kit';
+    import { Image as ImageExtension } from '@tiptap/extension-image';
+    import { Link } from '@tiptap/extension-link';
+    import { Heading } from '@tiptap/extension-heading';
+    import { TextStyle } from '@tiptap/extension-text-style';
+    import { FontFamily } from '@tiptap/extension-font-family';
+    import { Color } from '@tiptap/extension-color';
+    import { Underline } from '@tiptap/extension-underline';
+    import { TextAlign } from '@tiptap/extension-text-align';
+    import { Youtube } from '@tiptap/extension-youtube';
     import { writable, type Writable } from 'svelte/store';
 
     import Toolbar from './Toolbar.svelte';
@@ -17,7 +18,7 @@
     import FontSize from './extensions/FontSize';
     import { CustomCodeBlock } from './extensions/codeBlockConfig';
 
-    const VERSION = '1.0.74';
+    const VERSION = '1.0.75';
 
     interface ImageInfo {
         id: string;
@@ -180,6 +181,32 @@
         },
     });
 
+    // --- Tiptap YouTube 확장 커스터마이징 ---
+    const CustomYoutube = Youtube.extend({
+        // 우선순위를 높여 Link보다 먼저 처리
+        priority: 1000,
+
+        addPasteRules() {
+            return [
+                {
+                    find: /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)(?:[^\s]*)?/g,
+                    handler: ({ match, chain, range }: any) => {
+                        const url = match[0];
+                        console.log('[YouTube Paste] Detected URL:', url, 'Range:', range);
+
+                        // 원본 링크 텍스트를 삭제하고 YouTube embed만 삽입
+                        chain()
+                            .deleteRange(range)
+                            .setYoutubeVideo({
+                                src: url,
+                            })
+                            .run();
+                    },
+                },
+            ];
+        },
+    });
+
     // --- 이미지 관련 함수 ---
     function generateImageId(): string {
         return `img-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -249,7 +276,7 @@
             src: src,
             alt: alt,
             'data-image-id': id
-        }).run();
+        } as any).run();
         // 이미지 삽입 후 리사이즈 핸들러 추가 (약간의 지연 시간 후)
         setTimeout(initializeImageResizing, 50);
     }
@@ -759,7 +786,7 @@
     }
 
     // --- 라이프사이클 및 에디터 초기화 ---
-    onMount(async () => {
+    onMount(() => {
         detectColorScheme();
         const cleanupColorSchemeListener = setupColorSchemeListener();
 
@@ -849,6 +876,15 @@
                     types: ['heading', 'paragraph'],
                 }),
                 CustomCodeBlock,
+                CustomYoutube.configure({
+                    width: 640,
+                    height: 480,
+                    controls: true,
+                    modestBranding: true,
+                    HTMLAttributes: {
+                        class: 'youtube-video-wrapper',
+                    },
+                }),
             ],
             content: content,
             editorProps: {
@@ -875,12 +911,21 @@
                      transaction.steps.forEach(step => {
                          const stepMap = step.getMap();
                          stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
-                             currentEditor.state.doc.nodesBetween(newStart, newEnd, (node, pos) => {
-                                 if (node.type.name === 'image') imageModified = true;
-                                 return true; // 계속 순회
-                             });
-                             if (step.from !== step.to && step.slice?.content?.size === 0) {
-                                 const nodeBefore = currentEditor.state.doc.nodeAt(step.from);
+                             // 범위가 유효한지 확인
+                             const docSize = currentEditor.state.doc.content.size;
+                             if (newStart >= 0 && newEnd <= docSize && newStart <= newEnd) {
+                                 try {
+                                     currentEditor.state.doc.nodesBetween(newStart, newEnd, (node, pos) => {
+                                         if (node.type.name === 'image') imageModified = true;
+                                         return true; // 계속 순회
+                                     });
+                                 } catch (error) {
+                                     console.warn('[KirsiEditor] Error in nodesBetween:', error);
+                                 }
+                             }
+                             const stepAny = step as any;
+                             if (stepAny.from !== stepAny.to && stepAny.slice?.content?.size === 0) {
+                                 const nodeBefore = currentEditor.state.doc.nodeAt(stepAny.from);
                                  if (nodeBefore?.type.name === 'image') imageModified = true;
                              }
                          });
@@ -900,7 +945,7 @@
          const shadowHost = editorElement.getRootNode() as ShadowRoot;
          if (shadowHost && shadowHost.host) {
             (shadowHost.host as any).setContent = (newContent: string) => {
-                editor?.commands.setContent(newContent, false);
+                editor?.commands.setContent(newContent);
             };
             (shadowHost.host as any).getContent = () => {
                 return editor?.getHTML() || '';
@@ -994,7 +1039,7 @@
         return html;
     }
     export function setContent(newContent: string): void {
-        editor?.commands.setContent(newContent, false);
+        editor?.commands.setContent(newContent);
     }
     export function getImages(): ImageInfo[] {
         return $uploadedImages;
@@ -1167,10 +1212,6 @@
     
     .kirsi-dark-theme .editor-container {
         background-color: #1e1e1e;
-    }
-
-    .editor-container.drag-active {
-        
     }
 
     .editor-content {
@@ -1467,6 +1508,35 @@
     
     .kirsi-dark-theme .editor-version {
         color: #666;
+    }
+
+    /* YouTube Video Embed 스타일 */
+    :global(.youtube-video-wrapper) {
+        position: relative;
+        width: 100%;
+        max-width: 640px;
+        margin: 1rem auto;
+        aspect-ratio: 16 / 9;
+    }
+
+    :global(.youtube-video-wrapper iframe) {
+        width: 100%;
+        height: 100%;
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    :global(.kirsi-dark-theme .youtube-video-wrapper iframe) {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* YouTube 비디오 반응형 대응 */
+    @media (max-width: 768px) {
+        :global(.youtube-video-wrapper) {
+            max-width: 100%;
+            margin: 1rem 0;
+        }
     }
 
 </style>
